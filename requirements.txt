@@ -1,6 +1,15 @@
+# Core PDF and data processing
 reportlab==4.0.7
 pandas==2.1.4
 openpyxl==3.1.2
-python-barcode==0.15.1
-qrcode==7.4.2
+
+# Barcode generation (v1.x and v2.x)
+python-barcode==0.16.1
+qrcode==8.2
+
+# Image processing
 Pillow==10.1.0
+
+# DoD/NATO label requirements (v2.x)
+pylibdmtx==0.1.10
+segno==1.6.6

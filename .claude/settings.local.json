@@ -5,7 +5,14 @@
       "Bash(dir:*)",
       "Bash(git init:*)",
       "Bash(git branch:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nchore(init): initialize project with .agent documentation system v1.0.0\n\n- Set up .agent folder structure (tasks, system, sops)\n- Configure CLAUDE.md with project guidelines and conventions\n- Create update-doc command for automated documentation maintenance\n- Establish Git automation workflow\n- Add initial SOPs for git workflow and project setup\n- Document system architecture and label layout specifications\n- Configure archive folder for deprecated content\n- Configure versioning system (semantic versioning)\n\nThis establishes the AI-optimized documentation infrastructure for\nefficient development and knowledge management.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(pip install:*)",
+      "Bash(python test_installation.py:*)",
+      "Bash(python:*)",
+      "Bash(git remote add:*)",
+      "Bash(git push:*)",
+      "Bash(git checkout:*)"
     ],
     "deny": [],
     "ask": []
