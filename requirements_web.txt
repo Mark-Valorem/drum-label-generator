@@ -1,0 +1,23 @@
+# DoD/NATO Label Generator - Web Dashboard Dependencies
+# Install with: pip install -r requirements_web.txt
+
+# Web framework
+streamlit>=1.28.0
+
+# Data processing
+pandas>=2.1.4
+openpyxl>=3.1.2
+
+# Image processing
+Pillow>=10.1.0
+
+# Barcode generation
+python-barcode>=0.16.1
+pylibdmtx>=0.1.10
+
+# PDF generation (optional, for PDF export)
+reportlab>=4.0.7
+
+# QR codes (optional)
+qrcode>=8.2
+segno>=1.6.6

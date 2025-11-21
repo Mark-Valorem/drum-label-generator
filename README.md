@@ -1,6 +1,6 @@
 # Label Generator for Valorem Chemicals
 
-**v2.1.1: DoD/NATO Military Labels | v1.0: GHS Chemical Labels**
+**v2.2.0: DoD/NATO Military Labels | v1.0: GHS Chemical Labels**
 
 This project generates print-ready PDF and PNG labels for Valorem Chemicals Pty Ltd, supporting both military supply chain and chemical hazard labeling requirements.
 
@@ -8,7 +8,21 @@ This project generates print-ready PDF and PNG labels for Valorem Chemicals Pty 
 
 ## 🚀 Quick Start
 
-### DoD/NATO Military Labels (v2.1+)
+### Web Dashboard (NEW in v2.2.0) ✨
+
+```bash
+# Install dependencies
+pip install -r requirements_web.txt
+
+# Launch web dashboard
+streamlit run dod_label_app.py
+```
+
+Open http://localhost:8501 in your browser for drag-and-drop label generation!
+
+---
+
+### DoD/NATO Command Line (v2.1+)
 
 ```bash
 # Install dependencies
@@ -49,13 +63,20 @@ python drum_label_generator.py sample_data.csv
 
 ## 📦 What's Included
 
-### Version 2.1.1 (DoD/NATO) - UPDATED ✨
+### Version 2.2.0 (DoD/NATO) - WEB DASHBOARD ✨
+- **NEW: Streamlit Web Dashboard** for easy label generation
+  - Drag-and-drop CSV/Excel upload
+  - Per-row label size selection (8 sizes)
+  - Real-time label preview
+  - Download as PNG, PDF, or ZIP
+  - Dark/light mode toggle
 - **Military specification labels** per MIL-STD-129
+- **Field 12: Safety & Movement Markings** always displayed prominently
 - **PDF and PNG output formats:**
   - PDF: A4 format (210mm × 297mm)
-  - PNG: Multiple sizes (A5, A6, 4x6", 4x4", 3x2", A4)
+  - PNG: Multiple sizes (2"×1", 3"×2", 4"×2", 4"×3", 4"×4", 4"×6", A6, A5)
   - 600 DPI high-resolution output
-  - 10mm bleed margins with cut-line
+  - Bleed margins with cut-line
 - **4 barcode symbologies:**
   - Code 128 for Batch Lot No. (ISO/IEC 15417)
   - Code 39 for NIIN (ISO/IEC 16388)
@@ -81,12 +102,14 @@ python drum_label_generator.py sample_data.csv
 
 ## 📁 Project Files
 
-### DoD/NATO System (v2.1+)
+### DoD/NATO System (v2.2+)
 ```
-dod_label_generator.py           # PDF label generator
-dod_label_generator_png.py       # PNG label generator (600 DPI)
+dod_label_app.py                 # Streamlit web dashboard (NEW)
+dod_label_generator.py           # CLI PDF label generator
+dod_label_generator_png.py       # CLI PNG label generator (600 DPI)
 sample_data_dod.csv              # Example: 2 products
 verify_barcodes.py               # Barcode validation suite
+requirements_web.txt             # Web dashboard dependencies
 README_DOD.md                    # Complete documentation
 .agent/system/dod-label-specification.md  # Technical spec
 ```

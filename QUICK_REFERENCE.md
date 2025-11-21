@@ -1,18 +1,29 @@
 # Quick Reference Card
 
-**v2.1.1 | DoD/NATO Military Labels + GHS Chemical Labels**
+**v2.2.0 | DoD/NATO Military Labels + GHS Chemical Labels**
 
 ---
 
 ## Installation
 
 ```bash
-pip install -r requirements.txt
+pip install -r requirements_web.txt  # For web dashboard
+pip install -r requirements.txt       # For CLI tools
 ```
 
 ---
 
-## DoD/NATO Military Labels (v2.1+)
+## Web Dashboard (NEW in v2.2.0) ✨
+
+```bash
+streamlit run dod_label_app.py
+```
+
+Open http://localhost:8501 - drag & drop CSV/Excel, select label sizes per row, download PNG/PDF/ZIP.
+
+---
+
+## DoD/NATO Command Line (v2.1+)
 
 ### Generate PDF Labels
 ```bash

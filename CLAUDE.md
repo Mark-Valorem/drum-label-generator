@@ -1,18 +1,19 @@
 # Drum Label Generator - AI Agent Documentation
 
-**version:** v2.1.1
+**version:** v2.2.0
 **Last Updated:** 2025-11-21
 
 ## Project Overview
 
 Python-based label generator for Valorem Chemicals Pty Ltd supporting both:
-- **v2.1 (DoD/NATO):** Military supply labels with 4 barcode types (PDF A4 + PNG multiple sizes)
+- **v2.2 (DoD/NATO):** Military supply labels with web dashboard + CLI (PDF A4 + PNG multiple sizes)
 - **v1.0 (GHS):** Chemical hazard labels with GHS pictograms (A5 format)
 
 Generates print-ready PDF and PNG labels from CSV/Excel data with multiple barcode symbologies and regulatory compliance.
 
 **Tech Stack:**
 - Runtime: Python 3.x
+- Web Framework: Streamlit 1.28+ (NEW)
 - PDF Generation: ReportLab 4.0.7
 - Data Processing: Pandas 2.1.4
 - Barcodes: python-barcode 0.16.1, qrcode 8.2, pylibdmtx 0.1.10, segno 1.6.6

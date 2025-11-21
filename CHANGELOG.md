@@ -1,5 +1,39 @@
 # Changelog
 
+## Version 2.2.0 (2025-11-21)
+
+**Web Dashboard & UI**
+
+New Features:
+- New `dod_label_app.py` Streamlit web dashboard for easy label generation
+- Drag-and-drop CSV/Excel file upload
+- Editable data table with real-time preview
+- Per-row label size selection via dropdown (8 sizes available)
+- Field 12 (Safety & Movement Markings) always displayed prominently
+- Download options: Individual PNGs, Individual PDFs, ZIP archive
+- Dark/light mode toggle
+- Help documentation in sidebar
+
+Label Sizes:
+- 2" × 1" (50.8 × 25.4 mm)
+- 3" × 2" (76.2 × 50.8 mm)
+- 4" × 2" (101.6 × 50.8 mm)
+- 4" × 3" (101.6 × 76.2 mm)
+- 4" × 4" (101.6 × 101.6 mm)
+- 4" × 6" (101.6 × 152.4 mm) - default
+- A6 (105 × 148 mm)
+- A5 (148 × 210 mm)
+
+Usage:
+```bash
+pip install -r requirements_web.txt
+streamlit run dod_label_app.py
+```
+
+Open http://localhost:8501 in your browser.
+
+---
+
 ## Version 2.1.1 (2025-11-21)
 
 **PNG Output Support**
