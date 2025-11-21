@@ -1,15 +1,15 @@
 # Drum Label Generator - AI Agent Documentation
 
-**version:** v2.0.0
-**Last Updated:** 2025-11-15
+**version:** v2.1.1
+**Last Updated:** 2025-11-21
 
 ## Project Overview
 
 Python-based label generator for Valorem Chemicals Pty Ltd supporting both:
-- **v2.0 (DoD/NATO):** Military supply labels with 4 barcode types (A4 format)
+- **v2.1 (DoD/NATO):** Military supply labels with 4 barcode types (PDF A4 + PNG multiple sizes)
 - **v1.0 (GHS):** Chemical hazard labels with GHS pictograms (A5 format)
 
-Generates print-ready PDF labels from CSV/Excel data with multiple barcode symbologies and regulatory compliance.
+Generates print-ready PDF and PNG labels from CSV/Excel data with multiple barcode symbologies and regulatory compliance.
 
 **Tech Stack:**
 - Runtime: Python 3.x
@@ -73,9 +73,15 @@ python test_installation.py  # For v1.0 GHS labels
 python verify_barcodes.py    # For v2.0 DoD barcode validation
 ```
 
-**Generate DoD/NATO Labels (v2.0):**
+**Generate DoD/NATO PDF Labels (v2.1):**
 ```bash
 python dod_label_generator.py sample_data_dod.csv
+```
+
+**Generate DoD/NATO PNG Labels (v2.1):**
+```bash
+python dod_label_generator_png.py sample_data_dod.csv --size A5
+python dod_label_generator_png.py sample_data_dod.csv --all-sizes
 ```
 
 **Generate GHS Chemical Labels (v1.0):**
@@ -97,9 +103,15 @@ ls output/
 ## Project-Specific Conventions
 
 **File Naming:**
-- DoD labels (v2.0): `dod_label_{product_description}_{batch_number}_{timestamp}.pdf`
+- DoD PDF labels (v2.1): `dod_label_{product_description}_{batch_number}_{timestamp}.pdf`
+- DoD PNG labels (v2.1): `dod_label_{product_description}_{batch_number}_{size}_{timestamp}.png`
 - GHS labels (v1.0): `drum_label_{product_code}_{batch_number}_{timestamp}.pdf`
 - GHS pictograms: `GHS01.png` through `GHS09.png` (case-insensitive)
+
+**PNG Label Sizes:**
+- A5 (148×210mm), A6 (105×148mm), 4x6 (101.6×152.4mm)
+- 4x4 (101.6×101.6mm), 3x2 (76×51mm), A4 (210×297mm)
+- All at 600 DPI with 10mm bleed margins and cut-lines
 
 **Data Format (DoD v2.0):**
 - CSV/Excel with 21 fields: `product_description`, `nato_stock_no`, `niin`, `batch_lot_no`, `date_of_manufacture`, etc.
@@ -122,11 +134,12 @@ ls output/
 
 ## Compliance Context
 
-**DoD/NATO Requirements (v2.0):**
+**DoD/NATO Requirements (v2.0+):**
 - MIL-STD-129: Military Marking for Shipment and Storage
 - NATO STANAG: Standardization Agreements
 - ISO/IEC 15417 (Code 128), 16388 (Code 39), 16022 (Data Matrix)
-- GS1 General Specifications for AI usage
+- GS1 General Specifications for Application Identifiers (AI)
+- GS1 Data Matrix encoding with FNC1/GS separators (ASCII 29)
 - Print quality: Grade 1.0/0.5/660 per ISO/IEC 15416/15415
 
 **Australian Requirements (v1.0 GHS):**
@@ -141,12 +154,14 @@ ls output/
 
 ## Key Business Rules
 
-**DoD/NATO Labels (v2.0):**
-1. **NSN/NIIN Tracking**: NATO Stock Number required, NIIN auto-extracted from last 9 digits
+**DoD/NATO Labels (v2.0+):**
+1. **NSN/NIIN Tracking**: NATO Stock Number required (13 digits), NIIN auto-extracted from last 9 digits
 2. **Barcode Compliance**: All 4 barcodes must meet ISO specifications
-3. **Print Quality**: Minimum 600 DPI, grade 1.0/0.5/660 required
-4. **GS1 Compliance**: Submit Data Matrix to GS1 Australia for testing
-5. **Military Spec**: MIL-STD-129 compliance mandatory
+3. **GS1 Data Matrix**: Uses AI 7001 (NSN), AI 10 (Batch), AI 17 (Expiry), AI 21 (Serial) with GS separators
+4. **Date Format**: DD MMM YYYY for display (e.g., "15 NOV 2027"), YYMMDD for barcodes
+5. **Print Quality**: Minimum 600 DPI, grade 1.0/0.5/660 required
+6. **GS1 Compliance**: Submit Data Matrix to GS1 Australia for testing
+7. **Military Spec**: MIL-STD-129 compliance mandatory
 
 **GHS Chemical Labels (v1.0):**
 1. **Batch Traceability**: Every label must include unique batch number

@@ -1,158 +1,183 @@
 # Quick Reference Card
 
+**v2.1.1 | DoD/NATO Military Labels + GHS Chemical Labels**
+
+---
+
 ## Installation
 
 ```bash
-# One-time setup
-bash setup.sh
-
-# Or manually:
 pip install -r requirements.txt
-python3 test_installation.py
 ```
 
-## Generate Labels
+---
 
+## DoD/NATO Military Labels (v2.1+)
+
+### Generate PDF Labels
 ```bash
-# From CSV
-python3 drum_label_generator.py data.csv
-
-# From Excel
-python3 drum_label_generator.py data.xlsx
-
-# Test with sample data
-python3 drum_label_generator.py sample_data.csv
+python dod_label_generator.py sample_data_dod.csv
 ```
 
-## Common Workflows
-
-### Weekly drum batch labels
+### Generate PNG Labels (High-Resolution)
 ```bash
-# 1. Export from Unleashed to weekly_batch.csv
-# 2. Generate labels
-python3 drum_label_generator.py weekly_batch.csv
+# Default A5 at 600 DPI
+python dod_label_generator_png.py sample_data_dod.csv --size A5
 
-# 3. PDFs saved to output/ folder
-# 4. Print on A5 label stock
+# Other sizes: A6, 4x6, 4x4, 3x2, A4
+python dod_label_generator_png.py sample_data_dod.csv --size 4x6
+
+# All sizes at once
+python dod_label_generator_png.py sample_data_dod.csv --all-sizes
+
+# Custom DPI
+python dod_label_generator_png.py sample_data_dod.csv --dpi 300
 ```
 
-### Single product update
+### Verify Barcodes
 ```bash
-# 1. Edit sample_data.csv with new batch details
-# 2. Keep only the row(s) you need
-# 3. Generate
-python3 drum_label_generator.py sample_data.csv
+python verify_barcodes.py
 ```
 
-### Regulatory audit batch
+**Output:** PDF in `output/`, PNG in `output/png/`
+
+### 4 Barcode Types
+| Field | Type | Standard | Content |
+|-------|------|----------|---------|
+| 7 | Code 128 | ISO 15417 | Batch Lot No. |
+| 16 | Code 39 | ISO 16388 | NIIN (9 digits) |
+| 20 | Code 128 | ISO 15417 | Use by Date |
+| 21 | GS1 Data Matrix | ISO 16022 | NSN + Batch + Expiry |
+
+### GS1 Data Matrix Encoding
+```
+7001{NSN_13digits}<GS>10{BatchLot}<GS>17{YYMMDD}
+```
+- AI 7001: NSN (13 digits, no hyphens)
+- AI 10: Batch/Lot (variable length)
+- AI 17: Expiry date (YYMMDD)
+- `<GS>` = ASCII 29 separator
+
+### Date Formats
+- **Display (Fields 8, 13, 19):** DD MMM YYYY (e.g., "15 NOV 2027")
+- **Barcode (Field 17):** YYMMDD (e.g., "271115")
+
+### DoD CSV Columns (Key Fields)
+```
+nato_code, jsd_reference, specification, product_description,
+batch_lot_no, batch_lot_managed, date_of_manufacture,
+contractor_details, capacity_net_weight, nato_stock_no, niin,
+safety_movement_markings, shelf_life_months, test_report_no,
+unit_of_issue, hazardous_material_code, serial_number
+```
+
+---
+
+## GHS Chemical Labels (v1.0)
+
+### Generate Labels
 ```bash
-# Generate labels for specific date range in Excel:
-# Filter Unleashed export → Save as audit_batch.xlsx
-python3 drum_label_generator.py audit_batch.xlsx
-
-# Archive PDFs for compliance records
+python drum_label_generator.py sample_data.csv
+python drum_label_generator.py data.xlsx
 ```
 
-## Customisation
+### Test Installation
+```bash
+python test_installation.py
+```
 
-### Update company details
+**Output:** A5 labels with GHS pictograms in `output/` folder
+
+### GHS CSV Columns
+**Required:** `product_code`, `product_name`, `batch_number`
+
+**Optional:** `net_weight`, `un_number`, `ghs_pictograms`, `hazard_statements`
+
+### GHS Data Formats
+- Pictograms: `GHS02,GHS07,GHS09` (comma-separated)
+- Hazard statements: `H315: Skin irritation|H319: Eye irritation` (pipe-separated)
+
+---
+
+## Customisation (GHS Labels)
+
+### Company Details
 Edit `config.py`:
 ```python
 COMPANY_NAME = "Valorem Chemicals Pty Ltd"
 COMPANY_PHONE = "+61 (0)2 XXXX XXXX"
 ```
 
-### Adjust layout
+### Layout
 Edit `config.py`:
 ```python
-PICTOGRAM_SIZE = 20  # Increase for larger pictograms
-FONT_SIZE_BODY = 9   # Decrease for more content
-ROW_HEIGHT = 12      # Adjust row spacing
+PICTOGRAM_SIZE = 20  # mm
+FONT_SIZE_BODY = 9
+ROW_HEIGHT = 12
 ```
 
-### Change barcode format
-Edit `drum_label_generator.py`, line ~130:
-```python
-# Default: product_code + batch_number
-barcode_data = str(row.get('product_code', '')) + str(row.get('batch_number', ''))
-
-# Alternative: just batch number
-barcode_data = str(row.get('batch_number', ''))
-
-# Alternative: include date
-barcode_data = f"{row.get('product_code', '')}_{row.get('manufacture_date', '')}"
-```
+---
 
 ## Troubleshooting
 
-### Labels cut off
-Reduce font sizes or row heights in `config.py`
+### DoD Labels
+| Issue | Solution |
+|-------|----------|
+| Barcode verification fails | Run `python verify_barcodes.py` to diagnose |
+| "nan" appearing in fields | Check CSV for empty cells |
+| NSN format error | Use 13 digits: `nnnn-nn-nnn-nnnn` |
+| Data Matrix won't scan | Ensure 600 DPI print quality |
 
-### Barcode won't scan
-- Ensure batch number is alphanumeric only
-- Increase `BARCODE_HEIGHT` in config.py
-- Print test label and verify resolution
+### GHS Labels
+| Issue | Solution |
+|-------|----------|
+| Labels cut off | Reduce font sizes in `config.py` |
+| Barcode won't scan | Use alphanumeric only, increase height |
+| Pictograms missing | Add GHS01.png-GHS09.png to `ghs_pictograms/` |
 
-### GHS pictograms missing
-- Download PNGs to `ghs_pictograms/` folder
-- Name exactly: GHS01.png, GHS02.png, etc.
-- Check CSV uses correct codes: "GHS02,GHS07"
+---
 
-### Memory errors with large batches
-Process in smaller chunks:
-```python
-# In Python
-import pandas as pd
-df = pd.read_csv('large_file.csv')
+## PNG Label Sizes
 
-# Process first 50 rows
-df.head(50).to_csv('batch_1.csv', index=False)
-```
+| Size | Dimensions | Pixels (600 DPI) |
+|------|------------|------------------|
+| A5 | 148×210mm | 3968×5433px |
+| A6 | 105×148mm | 2835×3968px |
+| 4x6 | 101.6×152.4mm | 2400×3600px |
+| 4x4 | 101.6×101.6mm | 2400×2400px |
+| 3x2 | 76×51mm | 1795×1205px |
+| A4 | 210×297mm | 5433×7677px |
 
-## CSV Column Reference
+All PNG labels include 10mm bleed margins and cut-lines.
 
-**Minimum required:**
-- product_code
-- product_name  
-- batch_number
+---
 
-**Recommended:**
-- net_weight
-- gross_weight
-- manufacture_date
-- expiry_date
-
-**For dangerous goods:**
-- un_number
-- proper_shipping_name
-- hazard_class
-- packing_group
-
-**For GHS classification:**
-- ghs_pictograms (comma-separated: "GHS02,GHS07")
-- hazard_statements (pipe-separated: "H315: Skin irritation|H319: Eye irritation")
-- precautionary_statements (pipe-separated)
-
-## File Locations
+## File Structure
 
 ```
-drum-label-generator/
-├── drum_label_generator.py    # Main script
-├── config.py                   # Customisation
-├── requirements.txt            # Dependencies
-├── sample_data.csv             # Example data
-├── ghs_pictograms/            # Add PNG files here
-│   └── GHS0X.png
-└── output/                    # Generated PDFs
-    └── drum_label_*.pdf
+project/
+├── dod_label_generator.py     # DoD/NATO PDF labels
+├── dod_label_generator_png.py # DoD/NATO PNG labels (600 DPI)
+├── drum_label_generator.py    # GHS labels (v1.0)
+├── verify_barcodes.py         # Barcode validation
+├── config.py                  # GHS customisation
+├── sample_data_dod.csv        # DoD example data
+├── sample_data.csv            # GHS example data
+├── ghs_pictograms/            # GHS PNG files
+├── output/                    # Generated PDFs
+└── output/png/                # Generated PNGs
 ```
+
+---
+
+## Compliance
+
+**DoD/NATO:** MIL-STD-129, ISO 15417/16388/16022, GS1 specs
+
+**GHS:** GHS Rev 7, WHS Regulations 2011, ADG Code
+
+---
 
 ## Support
 
-Issues or features → Mark Anderson
-
-Common requests:
-- Batch processing automation (cron job)
-- Unleashed API integration (auto-fetch)
-- Email PDFs to production team
-- Multi-page layouts (A4 with 2×A5)
+Issues or features: Mark Anderson, Valorem Chemicals Pty Ltd

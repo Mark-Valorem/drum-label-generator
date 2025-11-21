@@ -100,7 +100,15 @@ def verify_code39(niin):
         return False
 
 def verify_gs1_datamatrix(nsn, batch_lot, expiry_yymmdd, serial_number=None):
-    """Verify GS1 Data Matrix barcode generation"""
+    """
+    Verify GS1 Data Matrix barcode generation per ISO/IEC 16022
+
+    GS1 Application Identifiers used:
+    - AI 7001: NSN (n13 - full NSN without hyphens, fixed length)
+    - AI 10: Batch/Lot (an..20 - variable length, needs GS separator)
+    - AI 17: Expiry Date (n6 - YYMMDD, fixed length)
+    - AI 21: Serial Number (an..20 - variable length, needs GS separator)
+    """
     print(f"\n{'='*60}")
     print(f"TESTING GS1 DATA MATRIX (ECC 200)")
     print(f"{'='*60}")
@@ -113,30 +121,43 @@ def verify_gs1_datamatrix(nsn, batch_lot, expiry_yymmdd, serial_number=None):
         print(f"  Serial: {serial_number}")
 
     try:
-        # Extract NIIN from NSN
-        niin = ''.join(filter(str.isdigit, str(nsn)))[-9:]
-        nsn_full = f"6135{niin}"  # Country code + NIIN = 13 digits
+        # GS character (ASCII 29) - Group Separator for variable-length AIs
+        GS = chr(29)
+
+        # AI 7001: NSN (13 digits - remove hyphens from full NSN)
+        # Example: "6850-99-224-5252" -> "6850992245252"
+        nsn_digits = ''.join(filter(str.isdigit, str(nsn)))
+        if len(nsn_digits) != 13:
+            print(f"  [WARN] NSN should be 13 digits, got {len(nsn_digits)}")
+            nsn_digits = nsn_digits.zfill(13)[-13:]
 
         print(f"\nProcessing:")
-        print(f"  NIIN extracted: {niin}")
-        print(f"  Full NSN (13 digits): {nsn_full}")
+        print(f"  NSN digits (13): {nsn_digits}")
 
-        # Build GS1 string
+        # Build GS1 string with proper separators
         batch_str = str(batch_lot)[:20]
-        gs1_data = f"7001{nsn_full}10{batch_str}17{expiry_yymmdd}"
+
+        # Format: 7001{NSN}[GS]10{Batch}[GS]17{YYMMDD}
+        # AI 7001 is fixed length (n13), no GS needed after
+        # AI 10 is variable length (an..20), needs GS after
+        # AI 17 is fixed length (n6)
+        gs1_data = f"7001{nsn_digits}{GS}10{batch_str}{GS}17{expiry_yymmdd}"
 
         if serial_number:
             serial_str = str(serial_number)[:20]
-            gs1_data += f"21{serial_str}"
+            gs1_data += f"{GS}21{serial_str}"
+
+        # Display-friendly version (replace GS with visible marker)
+        gs1_display = gs1_data.replace(GS, '<GS>')
 
         print(f"\nGS1 Data String:")
-        print(f"  AI 7001 (NSN): {nsn_full}")
+        print(f"  AI 7001 (NSN): {nsn_digits}")
         print(f"  AI 10 (Batch): {batch_str}")
         print(f"  AI 17 (Expiry): {expiry_yymmdd}")
         if serial_number:
             print(f"  AI 21 (Serial): {serial_str}")
-        print(f"  Full encoded string: {gs1_data}")
-        print(f"  Length: {len(gs1_data)} characters")
+        print(f"  Full encoded string: {gs1_display}")
+        print(f"  Length: {len(gs1_data)} characters (incl. GS separators)")
 
         # Generate Data Matrix
         encoded = dmtx_encode(gs1_data.encode('utf-8'))

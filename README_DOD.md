@@ -1,14 +1,14 @@
-# DoD/NATO Label Generator v2.0.0
+# DoD/NATO Label Generator v2.1.1
 
 **Military specification labels for Valorem Chemicals**
 
-Generates compliant A4 labels for Department of Defense (DoD) and NATO military supply chain products with multiple barcode symbologies per MIL-STD-129 and ISO specifications.
+Generates compliant PDF and PNG labels for Department of Defense (DoD) and NATO military supply chain products with multiple barcode symbologies per MIL-STD-129 and ISO specifications.
 
 ---
 
 ## Overview
 
-This is version 2.0.0, a complete redesign from the GHS chemical labels (v1.x). The DoD label system implements:
+This is version 2.1.1, featuring high-resolution PNG output alongside PDF generation. The DoD label system implements:
 
 - **4 Barcode types** across 21 data fields
 - **Military specification compliance** (MIL-STD-129, NATO STANAG)
@@ -57,11 +57,27 @@ See [sample_data_dod.csv](sample_data_dod.csv) for complete example.
 
 ### 3. Generate Labels
 
+**PDF Labels (A4):**
 ```bash
 python dod_label_generator.py sample_data_dod.csv
 ```
-
 PDFs saved to `output/` folder.
+
+**PNG Labels (High-Resolution):**
+```bash
+# Default A5 size at 600 DPI
+python dod_label_generator_png.py sample_data_dod.csv --size A5
+
+# Available sizes: A5, A6, 4x6, 4x4, 3x2, A4
+python dod_label_generator_png.py sample_data_dod.csv --size 4x6
+
+# Generate all sizes at once
+python dod_label_generator_png.py sample_data_dod.csv --all-sizes
+
+# Custom DPI (default 600)
+python dod_label_generator_png.py sample_data_dod.csv --dpi 300
+```
+PNGs saved to `output/png/` folder with 10mm bleed margins and cut-lines.
 
 ### 4. Verify Barcodes
 
@@ -116,7 +132,9 @@ Validates all 4 barcode types against specifications.
 
 ---
 
-## Label Layout (A4)
+## Label Layout
+
+### PDF (A4) / PNG (Multiple Sizes)
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -128,18 +146,18 @@ Validates all 4 barcode types against specifications.
 │  NIIN: 660357879                                             │
 │                                                              │
 │  [Batch Barcode]              [Use by Date Barcode]          │
-│  Batch Managed: Y             Use by Date: 15/11/2028        │
+│  Batch Managed: Y             Use by Date: 30 OCT 2028       │
 │                                                              │
 │  ┌────────────────────────────────────────────────────────┐ │
 │  │ NATO Code & JSD:   H-576      OM-33                    │ │
 │  │ Specification:     DEF STAN 91-39 Issue 4              │ │
 │  │ Batch Lot No.:     FM251115A                           │ │
-│  │ Date of Mfg:       15/11/2025                          │ │
-│  │ Capacity:          20 LI                                │ │
-│  │ Re-Test Date:      15/11/2028                          │ │
-│  │ Test Report No.:   -/Blank                             │ │
+│  │ Date of Mfg:       15 NOV 2025                         │ │
+│  │ Capacity:          20 LI                               │ │
+│  │ Re-Test Date:      30 OCT 2028                         │ │
+│  │ Test Report No.:   -                                   │ │
 │  ├────────────────────────────────────────────────────────┤ │
-│  │ Safety & Movement: Not Applicable or blank             │ │
+│  │ Safety & Movement: -                                   │ │
 │  ├────────────────────────────────────────────────────────┤ │
 │  │ Valorem Chemicals Pty Ltd                              │ │
 │  │ 123 Industrial Drive                                   │ │
@@ -147,6 +165,19 @@ Validates all 4 barcode types against specifications.
 │  └────────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+### PNG Label Sizes
+
+| Size | Dimensions | Pixels (600 DPI) | Use Case |
+|------|------------|------------------|----------|
+| A5 | 148×210mm | 3968×5433px | Standard label |
+| A6 | 105×148mm | 2835×3968px | Small container |
+| 4x6 | 101.6×152.4mm | 2400×3600px | Thermal printer |
+| 4x4 | 101.6×101.6mm | 2400×2400px | Square label |
+| 3x2 | 76×51mm | 1795×1205px | Small tag |
+| A4 | 210×297mm | 5433×7677px | Full page |
+
+**Note:** All PNG labels include 10mm bleed margins and dashed cut-lines.
 
 ---
 
@@ -352,9 +383,14 @@ use_by_barcode = self.generate_code128(gs1_formatted)
 ## Files
 
 ### Core Files
-- `dod_label_generator.py` - Main DoD label generator
+- `dod_label_generator.py` - PDF label generator (A4)
+- `dod_label_generator_png.py` - PNG label generator (600 DPI, multiple sizes)
 - `sample_data_dod.csv` - Example data for 2 products
 - `verify_barcodes.py` - Barcode verification suite
+
+### Output Folders
+- `output/` - Generated PDF labels
+- `output/png/` - Generated PNG labels
 
 ### Documentation
 - `README_DOD.md` - This file
@@ -380,6 +416,20 @@ use_by_barcode = self.generate_code128(gs1_formatted)
 
 ## Version History
 
+- **v2.1.1 (2025-11-21):** PNG output support
+  - New `dod_label_generator_png.py` for high-resolution PNG output
+  - Multiple label sizes: A5, A6, 4x6", 4x4", 3x2", A4
+  - 600 DPI resolution (configurable)
+  - 10mm bleed margins with cut-lines
+  - Fixed NIIN/Batch Lot barcode overlap issue
+  - Direct PIL/Pillow rendering (no poppler dependency)
+
+- **v2.1.0 (2025-11-21):** GS1 Data Matrix fix
+  - Corrected NSN encoding (full 13 digits, no hyphens)
+  - Added GS separators (ASCII 29) between AI fields
+  - Fixed date format to DD MMM YYYY
+  - Proper nan/empty value handling
+
 - **v2.0.0 (2025-11-15):** Complete redesign for DoD/NATO military supply labels
   - 4 barcode symbologies (Code 128, Code 39, GS1 Data Matrix)
   - 21-field data schema
@@ -403,4 +453,4 @@ For military supply chain and defense contractor applications only.
 ---
 
 **Built for Valorem Chemicals Pty Ltd**
-DoD/NATO Military Supply Label Generator v2.0.0
+DoD/NATO Military Supply Label Generator v2.1.1

@@ -27,10 +27,11 @@ from PIL import Image
 OUTPUT_FOLDER = "output"
 FONT_HEADER = "Helvetica-Bold"
 FONT_BODY = "Helvetica"
-FONT_SIZE_LARGE = 16
-FONT_SIZE_HEADER = 12
-FONT_SIZE_BODY = 10
+FONT_SIZE_LARGE = 20
+FONT_SIZE_HEADER = 14
+FONT_SIZE_BODY = 11
 FONT_SIZE_SMALL = 8
+FONT_SIZE_DATA = 12  # Larger font for field data values
 
 # Page settings (A4)
 PAGE_WIDTH, PAGE_HEIGHT = A4
@@ -86,9 +87,29 @@ class DoDLabelGenerator:
             date_obj = datetime.strptime(manufacture_date, "%d/%m/%Y")
             months = int(shelf_life_months) if pd.notna(shelf_life_months) else 24
             expiry_date = date_obj + timedelta(days=months * 30)  # Approximate
-            return expiry_date.strftime("%d/%m/%Y"), expiry_date
+            # Format as DD MMM YYYY (e.g., "15 NOV 2027")
+            return expiry_date.strftime("%d %b %Y").upper(), expiry_date
         except:
             return "N/A", None
+
+    def format_date_display(self, date_str):
+        """Convert DD/MM/YYYY to DD MMM YYYY format"""
+        try:
+            date_obj = datetime.strptime(date_str, "%d/%m/%Y")
+            return date_obj.strftime("%d %b %Y").upper()
+        except:
+            return date_str if date_str and str(date_str) != 'nan' else ""
+
+    def safe_str(self, value, default="-"):
+        """Convert value to string, handling nan and None"""
+        if pd.isna(value) or value is None or str(value).lower() == 'nan':
+            return default
+        str_val = str(value).strip()
+        # Handle common "blank" indicators (case-insensitive)
+        blank_values = ['not applicable or blank', '-/blank', 'n/a', '', '-', 'blank', 'na', 'none']
+        if str_val.lower() in blank_values:
+            return default
+        return str_val
 
     def generate_code128(self, data):
         """Generate Code 128 barcode image"""
@@ -138,31 +159,51 @@ class DoDLabelGenerator:
             return None
 
     def generate_gs1_datamatrix(self, nsn, batch_lot, expiry_date_obj, serial_number=None):
-        """Generate GS1 Data Matrix (ECC 200) 2D barcode"""
+        """
+        Generate GS1 Data Matrix (ECC 200) 2D barcode per ISO/IEC 16022
+
+        Data Content per GS1 spec:
+        - AI 7001: NSN (n13 - full NSN without hyphens)
+        - AI 10: Batch/Lot (an..20) - variable length, needs GS separator
+        - AI 17: Expiry Date (n6 - YYMMDD) - fixed length
+        - AI 21: Serial Number (an..20) - variable length, needs GS separator
+
+        FNC1/GS (ASCII 29) separates variable-length AI elements
+        """
         try:
-            # Extract NIIN from NSN (last 9 digits, no separators)
-            niin = ''.join(filter(str.isdigit, str(nsn)))[-9:]
+            # GS character (ASCII 29) - Group Separator for variable-length AIs
+            GS = chr(29)
 
-            # Build GS1 data string with Application Identifiers
-            # AI 7001: NSN (13 digits - add country code 6135 prefix for NIIN)
-            nsn_full = f"6135{niin}"  # Country code + NIIN = 13 digits
+            # AI 7001: NSN (13 digits - remove hyphens from full NSN)
+            # Example: "6850-99-224-5252" -> "6850992245252"
+            nsn_digits = ''.join(filter(str.isdigit, str(nsn)))
+            if len(nsn_digits) != 13:
+                print(f"Warning: NSN should be 13 digits, got {len(nsn_digits)}: {nsn_digits}")
+                # Pad or truncate to 13 digits
+                nsn_digits = nsn_digits.zfill(13)[-13:]
 
-            # AI 10: Batch/Lot (up to 20 characters)
-            batch_str = str(batch_lot)[:20]
+            # AI 10: Batch/Lot (up to 20 characters) - variable length
+            batch_str = str(batch_lot)[:20] if batch_lot and pd.notna(batch_lot) else ""
 
-            # AI 17: Expiry date (YYMMDD)
+            # AI 17: Expiry date (YYMMDD) - fixed length n6
             if expiry_date_obj:
                 expiry_str = expiry_date_obj.strftime("%y%m%d")
             else:
                 expiry_str = "990101"  # Default
 
-            # Build GS1 string: FNC1 + (7001) + NSN + FNC1 + (10) + Batch + FNC1 + (17) + Date
-            # FNC1 is handled internally by GS1 encoding
-            gs1_data = f"7001{nsn_full}10{batch_str}17{expiry_str}"
+            # Build GS1 string per spec:
+            # AI 7001 is fixed length (n13), no GS needed after
+            # AI 10 is variable length (an..20), needs GS after
+            # AI 17 is fixed length (n6), no GS needed after (unless followed by variable AI)
+            # AI 21 is variable length (an..20), needs GS after if not last
 
+            # Format: 7001{NSN}[GS]10{Batch}[GS]17{YYMMDD}
+            gs1_data = f"7001{nsn_digits}{GS}10{batch_str}{GS}17{expiry_str}"
+
+            # Add serial number if provided
             if serial_number and pd.notna(serial_number):
                 serial_str = str(serial_number)[:20]
-                gs1_data += f"21{serial_str}"
+                gs1_data += f"{GS}21{serial_str}"
 
             # Generate Data Matrix with GS1 encoding
             encoded = dmtx_encode(gs1_data.encode('utf-8'))
@@ -194,31 +235,47 @@ class DoDLabelGenerator:
             row.get('shelf_life_months', 24)
         )
 
-        # ===== HEADER SECTION =====
+        # Get formatted date of manufacture
+        dom_formatted = self.format_date_display(str(row.get('date_of_manufacture', '')))
 
-        # Field 4: Product Description (Large, centered)
+        # ===== SECTION 1: HEADER (Fields 4, 11) - OUTSIDE BORDER =====
+        # Field 4: Product Description (Large, centered) - above border
         c.setFont(FONT_HEADER, FONT_SIZE_LARGE)
-        product_desc = str(row.get('product_description', 'N/A'))
+        product_desc = self.safe_str(row.get('product_description', ''), 'N/A')
         text_width = c.stringWidth(product_desc, FONT_HEADER, FONT_SIZE_LARGE)
-        c.drawString((width - text_width) / 2, y_pos, product_desc)
-        y_pos -= 25
+        c.drawString((width - text_width) / 2, y_pos - 5, product_desc)
+        y_pos -= 30
 
-        # Field 11: NATO Stock No. (Centered, bold)
+        # Field 11: NATO Stock No. (Centered, bold) - above border
         c.setFont(FONT_HEADER, FONT_SIZE_HEADER)
-        nato_stock = str(row.get('nato_stock_no', 'N/A'))
+        nato_stock = self.safe_str(row.get('nato_stock_no', ''), 'N/A')
         text_width = c.stringWidth(nato_stock, FONT_HEADER, FONT_SIZE_HEADER)
         c.drawString((width - text_width) / 2, y_pos, nato_stock)
         y_pos -= 20
 
-        # ===== TOP BARCODE/INFO SECTION =====
+        # Save border top position (after header)
+        border_top = y_pos
 
-        # Field 16: NIIN Linear Barcode (Code 39) - Top Left
-        niin = str(row.get('niin', '000000000'))
+        # Draw outer border for label content (below header)
+        c.setStrokeColor(colors.black)
+        c.setLineWidth(1)
+        c.rect(x_left, MARGIN, content_width, border_top - MARGIN)
+
+        # Horizontal line at top of bordered area
+        c.line(x_left, y_pos, x_right, y_pos)
+
+        # ===== SECTION 2: NIIN BARCODE ROW (Fields 15, 16, 17, 18, 21) =====
+        y_pos -= 5
+
+        # Field 16: NIIN Linear Barcode (Code 39) - Left
+        niin = self.safe_str(row.get('niin', ''), '000000000')
         niin_barcode = self.generate_code39(niin)
 
-        # Field 17: Unit of Issue, Field 18: Hazardous Material Code, Field 21: GS1 Matrix
-        unit_issue = str(row.get('unit_of_issue', 'DR'))
-        hazmat = str(row.get('hazardous_material_code', 'N/A'))
+        # Field 17: Unit of Issue
+        unit_issue = self.safe_str(row.get('unit_of_issue', ''), 'DR')
+
+        # Field 18: Hazardous Material Code
+        hazmat = self.safe_str(row.get('hazardous_material_code', ''), '')
 
         # Generate GS1 Data Matrix (Field 21)
         datamatrix = self.generate_gs1_datamatrix(
@@ -228,28 +285,30 @@ class DoDLabelGenerator:
             row.get('serial_number', None)
         )
 
-        # Layout top section
-        barcode_y = y_pos - 30
+        barcode_y = y_pos - 20
 
-        # NIIN Barcode (left)
+        # NIIN Barcode (left side)
         if niin_barcode:
             niin_img_buffer = BytesIO()
             niin_barcode.save(niin_img_buffer, format='PNG')
             niin_img_buffer.seek(0)
             niin_reader = ImageReader(niin_img_buffer)
-            c.drawImage(niin_reader, x_left, barcode_y, width=60*mm, height=15*mm, preserveAspectRatio=True)
+            c.drawImage(niin_reader, x_left + 5, barcode_y, width=55*mm, height=15*mm, preserveAspectRatio=True)
 
-        # Unit of Issue (center-left)
-        c.setFont(FONT_BODY, FONT_SIZE_BODY)
-        c.drawString(x_left + 65*mm, barcode_y + 12*mm, f"Unit: {unit_issue}")
-
-        # Hazmat Code (center-right)
+        # Unit of Issue (center-left) - label normal, value bold and larger
         c.setFont(FONT_BODY, FONT_SIZE_SMALL)
-        hazmat_lines = hazmat.split(',')
-        hazmat_y = barcode_y + 12*mm
-        for line in hazmat_lines:
-            c.drawString(x_left + 95*mm, hazmat_y, line.strip())
-            hazmat_y -= 10
+        c.drawString(x_left + 62*mm, barcode_y + 10, "Unit: ")
+        c.setFont(FONT_HEADER, FONT_SIZE_DATA)  # Bold and larger for value
+        c.drawString(x_left + 62*mm + c.stringWidth("Unit: ", FONT_BODY, FONT_SIZE_SMALL), barcode_y + 10, unit_issue)
+
+        # Hazmat Code (center-right) - multiline
+        c.setFont(FONT_BODY, FONT_SIZE_SMALL)
+        if hazmat:
+            hazmat_lines = hazmat.split(',')
+            hazmat_y = barcode_y + 10
+            for line in hazmat_lines[:4]:  # Max 4 lines
+                c.drawString(x_left + 85*mm, hazmat_y, line.strip())
+                hazmat_y -= 8
 
         # GS1 Data Matrix (far right)
         if datamatrix:
@@ -257,128 +316,154 @@ class DoDLabelGenerator:
             datamatrix.save(dm_img_buffer, format='PNG')
             dm_img_buffer.seek(0)
             dm_reader = ImageReader(dm_img_buffer)
-            c.drawImage(dm_reader, x_right - 25*mm, barcode_y, width=25*mm, height=25*mm, preserveAspectRatio=True)
+            c.drawImage(dm_reader, x_right - 28*mm, barcode_y - 8, width=25*mm, height=25*mm, preserveAspectRatio=True)
 
-        # Field 15: NIIN (text below barcode)
-        c.setFont(FONT_BODY, FONT_SIZE_BODY)
-        c.drawString(x_left + 10*mm, barcode_y - 5, f"NIIN: {niin}")
+        y_pos = barcode_y - 18
 
-        y_pos = barcode_y - 15
+        # Field 15: NIIN text label below NIIN barcode
+        c.setFont(FONT_BODY, FONT_SIZE_SMALL)
+        c.drawString(x_left + 5, y_pos, "NIIN: ")
+        c.setFont(FONT_HEADER, FONT_SIZE_DATA)  # Bold and larger for value
+        c.drawString(x_left + 5 + c.stringWidth("NIIN: ", FONT_BODY, FONT_SIZE_SMALL), y_pos, niin)
 
-        # ===== MIDDLE BARCODE SECTION =====
+        y_pos -= 20  # Increased gap to prevent overlap with Batch Lot barcode
+
+        # Horizontal line after section 2
+        c.line(x_left, y_pos, x_right, y_pos)
+
+        # ===== SECTION 3: BATCH LOT & USE BY DATE BARCODES (Fields 6, 7, 19, 20) =====
+        y_pos -= 5
+
+        # Field 6: Batch Lot Managed
+        batch_managed = self.safe_str(row.get('batch_lot_managed', ''), 'N')
 
         # Field 7: Batch Lot No. Linear Barcode (Code 128) - Left
-        batch_lot = str(row.get('batch_lot_no', ''))
+        batch_lot = self.safe_str(row.get('batch_lot_no', ''), '')
         batch_barcode = self.generate_code128(batch_lot)
 
         # Field 20: Use by Date Linear Barcode (Code 128) - Right
-        # Format: "DD MMM YY" (9 characters)
         if expiry_date_obj:
-            use_by_formatted = expiry_date_obj.strftime("%d %b %y").upper()
+            use_by_barcode_text = expiry_date_obj.strftime("%d%b%y").upper()  # Compact for barcode
         else:
-            use_by_formatted = "01 JAN 99"
-        use_by_barcode = self.generate_code128(use_by_formatted)
+            use_by_barcode_text = "01JAN99"
+        use_by_barcode = self.generate_code128(use_by_barcode_text)
 
-        batch_barcode_y = y_pos - 20
+        batch_barcode_y = y_pos - 18
 
-        # Batch Lot Barcode (left)
+        # Batch Lot Barcode (left half)
         if batch_barcode:
             batch_img_buffer = BytesIO()
             batch_barcode.save(batch_img_buffer, format='PNG')
             batch_img_buffer.seek(0)
             batch_reader = ImageReader(batch_img_buffer)
-            c.drawImage(batch_reader, x_left, batch_barcode_y, width=80*mm, height=15*mm, preserveAspectRatio=True)
+            c.drawImage(batch_reader, x_left + 5, batch_barcode_y, width=70*mm, height=15*mm, preserveAspectRatio=True)
 
-        # Use by Date Barcode (right)
+        # Use by Date Barcode (right half)
         if use_by_barcode:
             use_by_img_buffer = BytesIO()
             use_by_barcode.save(use_by_img_buffer, format='PNG')
             use_by_img_buffer.seek(0)
             use_by_reader = ImageReader(use_by_img_buffer)
-            c.drawImage(use_by_reader, x_left + 105*mm, batch_barcode_y, width=80*mm, height=15*mm, preserveAspectRatio=True)
+            c.drawImage(use_by_reader, x_left + 100*mm, batch_barcode_y, width=70*mm, height=15*mm, preserveAspectRatio=True)
 
-        # Field 6: Batch Lot Managed (below batch barcode)
+        y_pos = batch_barcode_y - 15
+
+        # Field 6: Batch Lot Managed (below batch barcode) - label normal, value bold and larger
         c.setFont(FONT_BODY, FONT_SIZE_SMALL)
-        batch_managed = str(row.get('batch_lot_managed', 'N'))
-        c.drawString(x_left, batch_barcode_y - 10, f"Batch Lot Managed: {batch_managed}")
+        c.drawString(x_left + 5, y_pos, "Batch Lot Managed: ")
+        c.setFont(FONT_HEADER, FONT_SIZE_DATA)  # Bold and larger for value
+        c.drawString(x_left + 5 + c.stringWidth("Batch Lot Managed: ", FONT_BODY, FONT_SIZE_SMALL), y_pos, batch_managed)
 
-        # Field 19: Use by Date (below use by barcode)
-        c.drawString(x_left + 105*mm, batch_barcode_y - 10, f"Use by Date: {use_by_date}")
+        # Field 19: Use by Date text (below use by barcode) - label normal, value bold and larger
+        c.setFont(FONT_BODY, FONT_SIZE_SMALL)
+        c.drawString(x_left + 100*mm, y_pos, "Use by Date: ")
+        c.setFont(FONT_HEADER, FONT_SIZE_DATA)  # Bold and larger for value
+        c.drawString(x_left + 100*mm + c.stringWidth("Use by Date: ", FONT_BODY, FONT_SIZE_SMALL), y_pos, use_by_date)
 
-        y_pos = batch_barcode_y - 25
+        y_pos -= 12
 
-        # ===== INFORMATION TABLE =====
+        # Horizontal line after section 3
+        c.line(x_left, y_pos, x_right, y_pos)
 
-        table_data = []
+        # ===== SECTION 4: INFORMATION TABLE =====
+        y_pos -= 3
 
-        # NATO Code & JSD Reference row
-        nato_code = str(row.get('nato_code', ''))
-        jsd_ref = str(row.get('jsd_reference', ''))
-        if nato_code or jsd_ref:
-            table_data.append(['NATO Code & JSD Reference:', nato_code, jsd_ref])
+        # Get field values with proper nan handling
+        nato_code = self.safe_str(row.get('nato_code', ''), '')
+        jsd_ref = self.safe_str(row.get('jsd_reference', ''), '')
+        spec = self.safe_str(row.get('specification', ''), '')
+        capacity = self.safe_str(row.get('capacity_net_weight', ''), '')
+        test_report = self.safe_str(row.get('test_report_no', ''), '-')
 
-        # Specification
-        spec = str(row.get('specification', ''))
-        if spec and spec != 'nan':
-            table_data.append(['Specification:', spec, ''])
+        # Build table data - match exact format from specification
+        table_data = [
+            # Row 0: NATO Code & JSD Reference (3 columns)
+            ['NATO Code & JSD Reference:', nato_code, jsd_ref],
+            # Row 1: Specification (spans columns 1-2)
+            ['Specification:', spec, ''],
+            # Row 2: Batch Lot No. (spans columns 1-2)
+            ['Batch Lot No.', batch_lot, ''],
+            # Row 3: Date of Manufacture (spans columns 1-2)
+            ['Date of Manufacture', dom_formatted, ''],
+            # Row 4: Capacity or Net Weight (spans columns 1-2)
+            ['Capacity or Net Weight', capacity, ''],
+            # Row 5: Re-Test Date NATO/JSD products (spans columns 1-2)
+            ['Re-Test Date NATO/JSD products', use_by_date, ''],
+            # Row 6: Test Report No. (spans columns 1-2)
+            ['Test Report No.', test_report, ''],
+        ]
 
-        # Batch Lot No.
-        table_data.append(['Batch Lot No.', batch_lot, ''])
-
-        # Date of Manufacture
-        dom = str(row.get('date_of_manufacture', ''))
-        table_data.append(['Date of Manufacture', dom, ''])
-
-        # Capacity or Net Weight
-        capacity = str(row.get('capacity_net_weight', ''))
-        table_data.append(['Capacity or Net Weight', capacity, ''])
-
-        # Re-Test Date
-        table_data.append(['Re-Test Date NATO/JSD products', use_by_date, ''])
-
-        # Test Report No.
-        test_report = str(row.get('test_report_no', '-/Blank'))
-        table_data.append(['Test Report No.', test_report, ''])
-
-        # Create table
-        col_widths = [60*mm, 60*mm, 60*mm]
+        # Create table with proper column widths
+        col_widths = [55*mm, 65*mm, 60*mm]
         table = Table(table_data, colWidths=col_widths)
         table.setStyle(TableStyle([
-            ('FONT', (0, 0), (0, -1), FONT_HEADER, FONT_SIZE_SMALL),
-            ('FONT', (1, 0), (-1, -1), FONT_BODY, FONT_SIZE_SMALL),
-            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('LEFTPADDING', (0, 0), (-1, -1), 3),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 3),
-            ('TOPPADDING', (0, 0), (-1, -1), 3),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+            # Font styles - Labels normal (small), Data bold (larger)
+            ('FONT', (0, 0), (0, -1), FONT_BODY, FONT_SIZE_SMALL),   # Left column (labels) - normal, small
+            ('FONT', (1, 0), (-1, -1), FONT_HEADER, FONT_SIZE_DATA), # Other columns (data) - bold, larger
+            # Alignment
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('ALIGN', (0, 0), (0, -1), 'LEFT'),
+            ('ALIGN', (1, 0), (-1, -1), 'LEFT'),
+            # Padding
+            ('LEFTPADDING', (0, 0), (-1, -1), 5),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 5),
+            ('TOPPADDING', (0, 0), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+            # Grid
             ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
-            ('SPAN', (1, 1), (2, 1)),  # Specification row spans 2 columns
+            # Span columns 1-2 for rows 1-6 (except row 0 which has 3 distinct values)
+            ('SPAN', (1, 1), (2, 1)),  # Specification
+            ('SPAN', (1, 2), (2, 2)),  # Batch Lot No.
+            ('SPAN', (1, 3), (2, 3)),  # Date of Manufacture
+            ('SPAN', (1, 4), (2, 4)),  # Capacity or Net Weight
+            ('SPAN', (1, 5), (2, 5)),  # Re-Test Date
+            ('SPAN', (1, 6), (2, 6)),  # Test Report No.
         ]))
 
         table_width, table_height = table.wrapOn(c, content_width, height)
         table.drawOn(c, x_left, y_pos - table_height)
-        y_pos -= (table_height + 5)
+        y_pos -= (table_height + 3)
 
-        # Safety and Movement Markings (Field 12) - Full width row
-        safety_markings = str(row.get('safety_movement_markings', ''))
-        if safety_markings and safety_markings != 'nan':
+        # ===== SECTION 5: SAFETY AND MOVEMENT MARKINGS (Field 12) =====
+        safety_markings = self.safe_str(row.get('safety_movement_markings', ''), '')
+        if safety_markings:
             safety_table = Table([[safety_markings]], colWidths=[content_width])
             safety_table.setStyle(TableStyle([
                 ('FONT', (0, 0), (-1, -1), FONT_BODY, FONT_SIZE_SMALL),
-                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
                 ('LEFTPADDING', (0, 0), (-1, -1), 5),
                 ('RIGHTPADDING', (0, 0), (-1, -1), 5),
-                ('TOPPADDING', (0, 0), (-1, -1), 3),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+                ('TOPPADDING', (0, 0), (-1, -1), 4),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
                 ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
             ]))
             safety_width, safety_height = safety_table.wrapOn(c, content_width, height)
             safety_table.drawOn(c, x_left, y_pos - safety_height)
-            y_pos -= (safety_height + 5)
+            y_pos -= (safety_height + 3)
 
-        # Contractor's Details (Field 9) - Full width row
-        contractor_details = str(row.get('contractor_details', ''))
-        if contractor_details and contractor_details != 'nan':
+        # ===== SECTION 6: CONTRACTOR'S DETAILS (Field 9) =====
+        contractor_details = self.safe_str(row.get('contractor_details', ''), '')
+        if contractor_details:
             # Replace pipe delimiters with newlines
             contractor_text = contractor_details.replace('|', '\n')
             contractor_table = Table([[contractor_text]], colWidths=[content_width])
@@ -387,8 +472,8 @@ class DoDLabelGenerator:
                 ('VALIGN', (0, 0), (-1, -1), 'TOP'),
                 ('LEFTPADDING', (0, 0), (-1, -1), 5),
                 ('RIGHTPADDING', (0, 0), (-1, -1), 5),
-                ('TOPPADDING', (0, 0), (-1, -1), 3),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+                ('TOPPADDING', (0, 0), (-1, -1), 4),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
                 ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
             ]))
             contractor_width, contractor_height = contractor_table.wrapOn(c, content_width, height)

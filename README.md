@@ -1,27 +1,33 @@
 # Label Generator for Valorem Chemicals
 
-**v2.0: DoD/NATO Military Labels | v1.0: GHS Chemical Labels**
+**v2.1.1: DoD/NATO Military Labels | v1.0: GHS Chemical Labels**
 
-This project generates print-ready PDF labels for Valorem Chemicals Pty Ltd, supporting both military supply chain and chemical hazard labeling requirements.
+This project generates print-ready PDF and PNG labels for Valorem Chemicals Pty Ltd, supporting both military supply chain and chemical hazard labeling requirements.
 
 ---
 
 ## 🚀 Quick Start
 
-### DoD/NATO Military Labels (v2.0) - NEW
+### DoD/NATO Military Labels (v2.1+)
 
 ```bash
 # Install dependencies
 pip install -r requirements.txt
 
-# Generate labels for both products
+# Generate PDF labels
 python dod_label_generator.py sample_data_dod.csv
+
+# Generate high-resolution PNG labels (600 DPI)
+python dod_label_generator_png.py sample_data_dod.csv --size A5
+
+# Generate PNG labels in all sizes
+python dod_label_generator_png.py sample_data_dod.csv --all-sizes
 
 # Verify all 4 barcode types
 python verify_barcodes.py
 ```
 
-**Output:** A4 labels with 4 barcode types in `output/` folder
+**Output:** PDF labels in `output/`, PNG labels in `output/png/`
 
 **See:** [README_DOD.md](README_DOD.md) for complete documentation
 
@@ -43,15 +49,25 @@ python drum_label_generator.py sample_data.csv
 
 ## 📦 What's Included
 
-### Version 2.0 (DoD/NATO) - NEW ✨
+### Version 2.1.1 (DoD/NATO) - UPDATED ✨
 - **Military specification labels** per MIL-STD-129
+- **PDF and PNG output formats:**
+  - PDF: A4 format (210mm × 297mm)
+  - PNG: Multiple sizes (A5, A6, 4x6", 4x4", 3x2", A4)
+  - 600 DPI high-resolution output
+  - 10mm bleed margins with cut-line
 - **4 barcode symbologies:**
   - Code 128 for Batch Lot No. (ISO/IEC 15417)
   - Code 39 for NIIN (ISO/IEC 16388)
   - Code 128 for Use by Date
-  - GS1 Data Matrix ECC 200 (ISO/IEC 16022)
+  - GS1 Data Matrix ECC 200 (ISO/IEC 16022) with proper GS1 AI encoding
+- **GS1 Data Matrix** with Application Identifiers:
+  - AI 7001: Full NSN (13 digits, no hyphens)
+  - AI 10: Batch/Lot number
+  - AI 17: Expiry date (YYMMDD)
+  - AI 21: Serial number (if applicable)
+- **Date format:** DD MMM YYYY (e.g., "15 NOV 2027")
 - **21-field data schema** with NSN/NIIN tracking
-- **A4 format** (210mm × 297mm)
 - **Products:** Fuchs OM-33, DCI 4A
 
 ### Version 1.0 (GHS)
@@ -65,13 +81,14 @@ python drum_label_generator.py sample_data.csv
 
 ## 📁 Project Files
 
-### DoD/NATO System (v2.0)
+### DoD/NATO System (v2.1+)
 ```
-dod_label_generator.py           # Main generator (454 lines)
+dod_label_generator.py           # PDF label generator
+dod_label_generator_png.py       # PNG label generator (600 DPI)
 sample_data_dod.csv              # Example: 2 products
 verify_barcodes.py               # Barcode validation suite
 README_DOD.md                    # Complete documentation
-.agent/system/dod-label-specification.md  # Technical spec (322 lines)
+.agent/system/dod-label-specification.md  # Technical spec
 ```
 
 ### GHS System (v1.0)
@@ -105,11 +122,26 @@ pip install -r requirements.txt
 
 ## 📋 Usage
 
-### DoD Labels (v2.0)
+### DoD Labels (v2.1+)
 
-**Generate labels:**
+**Generate PDF labels:**
 ```bash
 python dod_label_generator.py your_data.csv
+```
+
+**Generate PNG labels (high-resolution):**
+```bash
+# Default A5 size at 600 DPI
+python dod_label_generator_png.py your_data.csv --size A5
+
+# Available sizes: A5, A6, 4x6, 4x4, 3x2, A4
+python dod_label_generator_png.py your_data.csv --size 4x6
+
+# Generate all sizes at once
+python dod_label_generator_png.py your_data.csv --all-sizes
+
+# Custom DPI (default 600)
+python dod_label_generator_png.py your_data.csv --dpi 300
 ```
 
 **Verify barcodes:**
@@ -222,6 +254,38 @@ python drum_label_generator.py sample_data.csv
 ---
 
 ## 🔄 Version History
+
+### v2.1.1 (2025-11-21) - PNG Output Support
+**Added high-resolution PNG label generation**
+
+New Features:
+- New `dod_label_generator_png.py` script for PNG output
+- 600 DPI high-resolution output (configurable)
+- Multiple label sizes: A5, A6, 4x6", 4x4", 3x2", A4
+- 10mm bleed margins on all sides
+- Dashed cut-line for print trimming
+- Direct PIL/Pillow rendering (no external dependencies like poppler)
+- Fixed NIIN/Batch Lot barcode overlap issue
+
+Usage:
+```bash
+python dod_label_generator_png.py sample_data_dod.csv --size A5
+python dod_label_generator_png.py sample_data_dod.csv --all-sizes
+```
+
+### v2.1.0 (2025-11-21) - GS1 Data Matrix Fix
+**Corrected GS1 Data Matrix encoding per ISO/IEC 16022**
+
+Fixed:
+- NSN encoding now uses full 13-digit NSN (no hyphens) instead of constructed value
+- Added FNC1/GS separators (ASCII 29) between variable-length AI fields
+- Date format corrected to DD MMM YYYY for display fields (8, 13, 19)
+- Proper handling of nan/empty values in all fields
+
+GS1 Data Matrix now encodes:
+```
+7001{NSN_13digits}<GS>10{BatchLot}<GS>17{YYMMDD}
+```
 
 ### v2.0.0 (2025-11-15) - Major Release
 **Complete redesign for DoD/NATO military supply labels**
