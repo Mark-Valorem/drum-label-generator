@@ -153,20 +153,20 @@ class DoDLabelGeneratorPNG:
         return True
 
     def calculate_dates(self, manufacture_date, shelf_life_months):
-        """Calculate re-test date and use by date"""
+        """Calculate re-test date and use by date (Requirement 3: DD MMM YY format)"""
         try:
             date_obj = datetime.strptime(manufacture_date, "%d/%m/%Y")
             months = int(shelf_life_months) if pd.notna(shelf_life_months) else 24
             expiry_date = date_obj + timedelta(days=months * 30)
-            return expiry_date.strftime("%d %b %Y").upper(), expiry_date
+            return expiry_date.strftime("%d %b %y").upper(), expiry_date
         except:
             return "N/A", None
 
     def format_date_display(self, date_str):
-        """Convert DD/MM/YYYY to DD MMM YYYY format"""
+        """Convert DD/MM/YYYY to MMM YYYY format (Requirement 2)"""
         try:
             date_obj = datetime.strptime(date_str, "%d/%m/%Y")
-            return date_obj.strftime("%d %b %Y").upper()
+            return date_obj.strftime("%b %Y").upper()
         except:
             return date_str if date_str and str(date_str) != 'nan' else ""
 
@@ -316,7 +316,6 @@ class DoDLabelGeneratorPNG:
         # ===== SECTION 2: NIIN BARCODE ROW =====
         niin = self.safe_str(row.get('niin', ''), '000000000')
         unit_issue = self.safe_str(row.get('unit_of_issue', ''), 'DR')
-        batch_managed = self.safe_str(row.get('batch_lot_managed', ''), 'N')
 
         # NIIN Barcode (Code 39)
         niin_barcode = self.generate_code39(niin)
@@ -405,9 +404,11 @@ class DoDLabelGeneratorPNG:
 
         y_pos += barcode_row_height + mm_to_px(2, self.dpi)
 
-        # Batch Lot Managed text
-        draw.text((x_left, y_pos), "Batch Lot Managed: ", fill='black', font=font_small)
-        blm_width = draw.textbbox((0, 0), "Batch Lot Managed: ", font=font_small)[2]
+        # Batch Lot Managed text (Requirement 1: Format as "B/L: Y" or "B/L: N")
+        batch_managed_raw = self.safe_str(row.get('batch_lot_managed', ''), 'N')
+        batch_managed = 'Y' if batch_managed_raw.upper() in ['Y', 'YES'] else 'N'
+        draw.text((x_left, y_pos), "B/L: ", fill='black', font=font_small)
+        blm_width = draw.textbbox((0, 0), "B/L: ", font=font_small)[2]
         draw.text((x_left + blm_width, y_pos), batch_managed, fill='black', font=font_data)
 
         # Use by Date text
@@ -428,15 +429,17 @@ class DoDLabelGeneratorPNG:
         spec = self.safe_str(row.get('specification', ''), '-')
         capacity = self.safe_str(row.get('capacity_net_weight', ''), '-')
         test_report = self.safe_str(row.get('test_report_no', ''), '-')
+        hazmat_code = self.safe_str(row.get('hazardous_material_code', ''), '-')
 
         table_data = [
-            ('NATO Code & JSD Reference:', f"{nato_code}  {jsd_ref}"),
+            ('NATO Code / JSD:', f"{nato_code}|{jsd_ref}"),  # Req 7: Use internal separator for inline rendering
             ('Specification:', spec),
             ('Batch Lot No.', batch_lot),
             ('Date of Manufacture', dom_formatted),
             ('Capacity or Net Weight', capacity),
             ('Re-Test Date NATO/JSD', use_by_date),
             ('Test Report No.', test_report),
+            ('Hazardous Material Code', hazmat_code),  # Req 5: Always display (default "-")
         ]
 
         row_height = self.FONT_SIZE_DATA + mm_to_px(4, self.dpi)
@@ -450,7 +453,61 @@ class DoDLabelGeneratorPNG:
             # Draw text
             text_y = y_pos + mm_to_px(1, self.dpi)
             draw.text((x_left, text_y), label, fill='black', font=font_small)
-            draw.text((x_left + col1_width + mm_to_px(2, self.dpi), text_y), value, fill='black', font=font_data)
+
+            # SPECIAL CASE: NATO Code / JSD row (Inline Rendering - Req 4 & 7)
+            if label == 'NATO Code / JSD:':
+                # Parse the combined value
+                nato_code_val, jsd_ref_val = value.split('|')
+
+                # Starting X position for value column
+                value_x = x_left + col1_width + mm_to_px(2, self.dpi)
+                current_x = value_x
+
+                # BUG FIX 2: Skip rectangle if NATO code is just a placeholder dash
+                if nato_code_val == '-':
+                    # Draw dash only, no rectangle
+                    draw.text((current_x, text_y), nato_code_val, fill='black', font=font_data)
+                    dash_width = draw.textbbox((0, 0), nato_code_val, font=font_data)[2]
+                    current_x += dash_width + mm_to_px(2, self.dpi)
+
+                    # Draw separator and JSD
+                    separator = " | "
+                    draw.text((current_x, text_y), separator, fill='black', font=font_data)
+                    sep_width = draw.textbbox((0, 0), separator, font=font_data)[2]
+                    current_x += sep_width
+                    draw.text((current_x, text_y), jsd_ref_val, fill='black', font=font_data)
+                else:
+                    # Step 1: Measure NATO Code text using actual text position
+                    text_x = current_x + 12  # Start text with padding
+                    nato_bbox = draw.textbbox((text_x, text_y), nato_code_val, font=font_data)
+
+                    # Step 2: Calculate rectangle with padding around actual text bounds
+                    padding = 10  # Padding around the bounding box
+                    rect_x1 = nato_bbox[0] - padding
+                    rect_y1 = nato_bbox[1] - padding
+                    rect_x2 = nato_bbox[2] + padding
+                    rect_y2 = nato_bbox[3] + padding
+
+                    # Step 3: Draw rectangle border around NATO Code (thicker border)
+                    draw.rectangle([rect_x1, rect_y1, rect_x2, rect_y2], outline='black', width=3)
+
+                    # Step 4: Draw NATO Code text inside rectangle (with padding offset)
+                    draw.text((text_x, text_y), nato_code_val, fill='black', font=font_data)
+
+                    # Step 5: Move cursor to right of rectangle
+                    current_x = rect_x2 + mm_to_px(2, self.dpi)
+
+                    # Step 6: Draw separator " | "
+                    separator = " | "
+                    draw.text((current_x, text_y), separator, fill='black', font=font_data)
+                    sep_width = draw.textbbox((0, 0), separator, font=font_data)[2]
+                    current_x += sep_width
+
+                    # Step 7: Draw JSD Reference text
+                    draw.text((current_x, text_y), jsd_ref_val, fill='black', font=font_data)
+            else:
+                # Standard table cell rendering (unchanged)
+                draw.text((x_left + col1_width + mm_to_px(2, self.dpi), text_y), value, fill='black', font=font_data)
 
             y_pos += row_height
 

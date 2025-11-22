@@ -1,6 +1,6 @@
 # Project Progress & Version History
 **Project:** DoD/NATO Military Label Generator
-**Current Version:** 2.2.2
+**Current Version:** 2.2.4
 **Last Updated:** 2025-11-22
 
 ---
@@ -9,8 +9,193 @@
 
 ```
 v1.0.0 (2024-11-13) → v2.0.0 (2025-11-15) → v2.1.0 (2025-11-21) →
-v2.1.1 (2025-11-21) → v2.2.0 (2025-11-21) → v2.2.1 (2025-11-22) → v2.2.2 (2025-11-22)
+v2.1.1 (2025-11-21) → v2.2.0 (2025-11-21) → v2.2.1 (2025-11-22) →
+v2.2.2 (2025-11-22) → v2.2.3 (2025-11-22) → v2.2.4 (2025-11-22)
 ```
+
+---
+
+## v2.2.4 (2025-11-22) - Formatting Overhaul & Visual Fixes
+
+### Type: Feature + Bugfix (Visual Polish)
+
+### Overview
+Combined formatting updates (v2.2.3) and NATO Code visual bug fixes into a comprehensive label refinement release. This version standardizes date formats, abbreviates verbose labels, fixes critical rendering bugs, and improves visual aesthetics.
+
+### Features (v2.2.3 - Formatting Updates)
+
+#### 1. Field 6 (Batch Lot Managed) - Format Abbreviation
+**Before:** "Batch Lot Managed: Yes" / "Batch Lot Managed: No"
+**After:** "B/L: Y" / "B/L: N"
+
+**Implementation:**
+```python
+batch_managed_raw = self.safe_str(row.get('batch_lot_managed', ''), 'N')
+batch_managed = 'Y' if batch_managed_raw.upper() in ['Y', 'YES'] else 'N'
+draw.text((x_left, y_pos), "B/L: ", fill='black', font=font_small)
+draw.text((x_left + blm_width, y_pos), batch_managed, fill='black', font=font_data)
+```
+
+**Rationale:** Compact format saves space, improves readability for field personnel.
+
+#### 2. Field 8 (Date of Manufacture) - Month-Year Format
+**Before:** "15 NOV 2025" (full date)
+**After:** "NOV 2025" (month-year only)
+
+**Format String:** `strftime("%b %Y")`
+
+**Rationale:** Manufacturing typically tracked by month granularity, not specific day.
+
+#### 3. Field 19 (Use by Date) - Short Year Format
+**Before:** "05 NOV 2027" (4-digit year)
+**After:** "05 NOV 27" (2-digit year)
+
+**Format String:** `strftime("%d %b %y").upper()`
+
+**Rationale:** Space optimization, consistent with MIL-STD-129 date conventions.
+
+#### 4. Field 1 (NATO Code) - Rectangle Border
+**Added:** 10px padded rectangle around NATO Code text with 3px border width
+
+**Specifications:**
+- Padding: 10px on all sides around text bounding box
+- Border Width: 3px (thicker than table borders for emphasis)
+- Color: Black outline
+- Condition: Only drawn when `nato_code != '-'`
+
+**Visual Impact:** Highlights critical NATO classification code for quick identification.
+
+#### 5. Field 18 (Hazardous Material Code) - Always Display
+**Before:** Hidden row when empty
+**After:** Always displayed with "-" default value
+
+**Table Entry:**
+```python
+hazmat_code = self.safe_str(row.get('hazardous_material_code', ''), '-')
+table_data = [
+    # ... other fields ...
+    ('Hazardous Material Code', hazmat_code),
+]
+```
+
+**Rationale:** Ensures consistent table structure across all labels.
+
+#### 6. Field 12 (Safety & Movement Markings) - Remove Prefix (App Only)
+**Before:** "Field 12: HIGHLY FLAMMABLE"
+**After:** "HIGHLY FLAMMABLE"
+
+**Scope:** Streamlit dashboard only (PDF/PNG generators already correct)
+
+**Rationale:** Cleaner presentation, field number not needed for end users.
+
+#### 7. Fields 1 & 2 Separator - Add " | " Between NATO Code and JSD
+**Before:** NATO Code and JSD on separate rows or concatenated without separator
+**After:** Inline rendering with " | " separator: "H-576 | OM-33"
+
+**Critical Requirement:** Must render on SAME row with inline rendering logic.
+
+### Fixes (v2.2.4 - NATO Code Visual Bugs)
+
+#### Bug 1: Rectangle Border Cutting Through Text
+**Problem:** Rectangle border was cutting through first letter and bottom descenders of NATO Code text.
+
+**Root Cause:** Using `draw.textbbox((0, 0), text, font)` calculates bounding box without accounting for actual text position. PIL's text rendering uses y-coordinate as BASELINE, not top of text.
+
+**Failed Attempts:**
+1. Increased padding to 8px - border still cuts text
+2. Increased padding to 10px, then 12px - y-coordinates remained incorrect
+3. Root cause identified: padding amount wasn't the issue, calculation method was wrong
+
+**Final Solution:**
+```python
+# Calculate bounding box using ACTUAL text position
+text_x = current_x + 12
+nato_bbox = draw.textbbox((text_x, text_y), nato_code_val, font=font_data)
+
+padding = 10  # Padding around bounding box
+rect_x1 = nato_bbox[0] - padding
+rect_y1 = nato_bbox[1] - padding  # Use actual bbox y-coordinates
+rect_x2 = nato_bbox[2] + padding
+rect_y2 = nato_bbox[3] + padding
+
+draw.rectangle([rect_x1, rect_y1, rect_x2, rect_y2], outline='black', width=3)
+draw.text((text_x, text_y), nato_code_val, fill='black', font=font_data)
+```
+
+**Technical Insight:** `draw.textbbox((actual_x, actual_y), text, font)` accounts for where text will be drawn, giving correct baseline-adjusted coordinates.
+
+#### Bug 2: Empty Box Around Dash "-"
+**Problem:** When NATO Code is "-" (placeholder), small rectangle was drawn around the dash, looking like graphical error.
+
+**Solution:** Add conditional check to skip rectangle rendering for placeholder values:
+```python
+if nato_code_val == '-':
+    # Draw dash only, NO rectangle
+    draw.text((current_x, text_y), nato_code_val, fill='black', font=font_data)
+    # ... continue with separator and JSD ...
+else:
+    # Draw rectangle + NATO Code + separator + JSD
+    # ... full inline rendering logic ...
+```
+
+**Visual Result:** Clean rendering for labels without NATO codes (e.g., DCI 4A product).
+
+### Files Modified
+1. **`dod_label_generator_png.py`** - All formatting changes and visual fixes (Lines 155-508)
+   - Date formatting functions
+   - Field 6 abbreviation
+   - Field 18 always-display
+   - NATO Code inline rendering with rectangle
+2. **`dod_label_app.py`** - Identical changes for Streamlit dashboard (Lines 136-491)
+3. **`.claude_docs/MEMORY.md`** - Added "Visual Style Standards (v2.2.4+)" section (Lines 696-763)
+4. **`.claude_docs/PROGRESS.md`** - This entry
+
+### Breaking Changes
+- None (visual changes only, no data schema modifications)
+
+### Testing
+**Visual Verification:**
+- ✅ Fuchs OM-11 (NATO Code "H-576"): Rectangle renders perfectly around text with 10px padding
+- ✅ DCI 4A (NATO Code "-"): No rectangle, clean dash rendering
+- ✅ Date formats: Field 8 shows "NOV 2025", Field 19 shows "05 NOV 27"
+- ✅ Field 6: "B/L: Y" / "B/L: N" format
+- ✅ Field 18: Hazmat code displays with "-" default
+- ✅ Inline separator: "H-576 | OM-33" on same row
+
+**Functional Verification:**
+- ✅ All 4 barcodes still scannable (visual changes don't affect barcode generation)
+- ✅ PDF and PNG generation both working
+- ✅ Streamlit dashboard reflects all changes
+- ✅ Data schema unchanged (backward compatible)
+
+### User Feedback
+> "The visual fixes look great!" - Mark Anderson
+
+### Git Branches
+- `feat-label-formatting-updates` (v2.2.3 work)
+- `fix-nato-visuals` (v2.2.4 work)
+- Merged to `main` in single commit
+
+### Compliance Impact
+- ✅ MIL-STD-129: Date format changes align with military date conventions
+- ✅ ISO barcode standards: Unchanged (visual changes don't affect symbology)
+- ✅ GS1 Data Matrix: Unchanged (barcode data remains compliant)
+
+### Documentation Updates
+Added comprehensive "Visual Style Standards" section to MEMORY.md documenting:
+- Date format requirements (Field 8: `%b %Y`, Field 19: `%d %b %y`)
+- Field 6 format (B/L: Y/N)
+- NATO Code box rendering specifications
+- Common mistakes to avoid (bounding box calculation pitfalls)
+- Code examples for correct implementation
+
+---
+
+## v2.2.3 (2025-11-22) - Label Formatting Updates
+
+**Status:** Merged into v2.2.4 (combined release)
+
+**See v2.2.4 above for complete details.**
 
 ---
 

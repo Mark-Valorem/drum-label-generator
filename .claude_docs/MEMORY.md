@@ -692,6 +692,75 @@ def generate_datamatrix(self, row):
 
 **DO NOT MODIFY:**
 - FNC1 character (ASCII 29)
+
+---
+
+## Visual Style Standards (v2.2.4+)
+
+### Date Formatting
+**CRITICAL:** Date formats were changed in v2.2.3 and MUST be maintained:
+
+1. **Field 8 (Date of Manufacture):**
+   - Format: `%b %Y` (e.g., "NOV 2025")
+   - Function: `format_date_display()`
+   - Input: DD/MM/YYYY string
+   - Output: Uppercase month abbreviation + year
+
+2. **Field 19 (Use by Date / Re-Test Date):**
+   - Format: `%d %b %y` (e.g., "05 NOV 27")
+   - Function: `calculate_dates()`
+   - Input: Manufacture date + shelf life months
+   - Output: Uppercase 2-digit year format
+
+### Field 6 (Batch Lot Managed)
+**Format:** `"B/L: Y"` or `"B/L: N"`
+- Label text: "B/L: " (shortened from "Batch Lot Managed: ")
+- Value: 'Y' if raw value is 'Y' or 'YES' (case-insensitive), else 'N'
+
+### NATO Code Box Rendering (Field 1)
+**CRITICAL:** Implemented in v2.2.4 with specific requirements:
+
+**When to Draw Box:**
+- ONLY when `nato_code_val != '-'`
+- If NATO code is a dash/placeholder, render as plain text with NO rectangle
+
+**Box Specifications:**
+```python
+# Correct implementation (v2.2.4):
+text_x = current_x + 12  # Offset text start position
+nato_bbox = draw.textbbox((text_x, text_y), nato_code_val, font=font_data)
+
+padding = 10  # Padding around bounding box
+rect_x1 = nato_bbox[0] - padding
+rect_y1 = nato_bbox[1] - padding
+rect_x2 = nato_bbox[2] + padding
+rect_y2 = nato_bbox[3] + padding
+
+draw.rectangle([rect_x1, rect_y1, rect_x2, rect_y2], outline='black', width=3)
+draw.text((text_x, text_y), nato_code_val, fill='black', font=font_data)
+```
+
+**Key Requirements:**
+1. **Padding:** 10px on all sides around text bounding box
+2. **Border Width:** 3px (thicker than table borders which are 1-2px)
+3. **Bounding Box Method:** Use `draw.textbbox((text_x, text_y), text, font)` with ACTUAL text position, not (0,0)
+4. **Conditional Rendering:** Check if value is "-" and skip box if true
+
+**Common Mistakes to Avoid:**
+- ❌ Using `draw.textbbox((0, 0), ...)` - causes incorrect y-coordinates
+- ❌ Calculating padding from text baseline instead of bounding box
+- ❌ Drawing box for dash "-" values (looks like graphical glitch)
+- ❌ Using padding < 10px (causes border to cut through text descenders)
+
+### Field 18 (Hazardous Material Code)
+**Always Display:** This field MUST be shown in the information table
+- Default value: "-" if empty/missing
+- Added in v2.2.3 as new table row
+
+### Field 12 (Safety & Movement Markings)
+**Label Text (App only):**
+- ❌ OLD: "Field 12: Safety & Movement Markings"
+- ✅ NEW: "Safety & Movement Markings" (removed "Field 12:" prefix)
 - AI 7001 (NSN is mandatory)
 - String encoding (UTF-8)
 
