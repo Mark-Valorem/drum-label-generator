@@ -1,0 +1,92 @@
+# Claude Code Ignore File
+# Prevents Claude from indexing generated files and artifacts
+# Version: 1.0.0
+# Last Updated: 2025-11-22
+
+# Generated output files (labels)
+output/
+*.pdf
+*.png
+*.jpg
+
+# Python artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+*.whl
+
+# Virtual environments
+env/
+venv/
+ENV/
+.venv/
+virtualenv/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+
+# Operating system files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# Cache and temporary files
+.streamlit/
+*.log
+*.tmp
+*.temp
+.cache/
+
+# Archive and legacy code
+archive/
+drum-label-generator/drum-label-generator/
+
+# Reference images and documents
+information/*.jpg
+information/*.pdf
+information/*.png
+
+# Test outputs
+test_output/
+*.test.png
+*.test.pdf
+
+# Database files (if any)
+*.db
+*.sqlite
+*.sqlite3
+
+# Compiled Python files in root
+*.pyc
+
+# Large binary files
+*.zip
+*.tar.gz
+*.rar
+
+# Backup files
+*.bak
+*.backup
+*~
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/

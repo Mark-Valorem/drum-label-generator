@@ -611,12 +611,24 @@ def main():
             # Download section
             st.markdown("### 📥 Download Labels")
 
+            # Option to save to output folder
+            save_to_folder = st.checkbox("💾 Also save to output folder", value=True,
+                                         help="Save files to the project's output/ folder in addition to browser download")
+
+            # Create output directories if needed
+            output_png_dir = Path("output/png")
+            output_pdf_dir = Path("output/pdf")
+            if save_to_folder:
+                output_png_dir.mkdir(parents=True, exist_ok=True)
+                output_pdf_dir.mkdir(parents=True, exist_ok=True)
+
             col1, col2, col3 = st.columns(3)
 
             with col1:
                 if st.button("📷 Download All PNGs", type="secondary", use_container_width=True):
                     with st.spinner("Generating PNG labels..."):
                         png_files = []
+                        saved_paths = []
                         for idx, row in edited_df.iterrows():
                             row_data = row.to_dict()
                             label_size = row_data.get('Label Size', DEFAULT_LABEL_SIZE)
@@ -632,6 +644,12 @@ def main():
                             filename = "".join(c if c.isalnum() or c in '-_.' else '_' for c in filename)
                             png_files.append((filename, buffer.getvalue()))
 
+                            # Also save to output folder if enabled
+                            if save_to_folder:
+                                filepath = output_png_dir / filename
+                                img.save(filepath, format='PNG', dpi=(DPI, DPI))
+                                saved_paths.append(str(filepath))
+
                         # Create ZIP
                         zip_buffer = BytesIO()
                         with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
@@ -646,11 +664,15 @@ def main():
                             mime="application/zip"
                         )
 
+                        if save_to_folder and saved_paths:
+                            st.success(f"✅ {len(saved_paths)} PNG files saved to: output/png/")
+
             with col2:
                 if HAS_REPORTLAB:
                     if st.button("📄 Download All PDFs", type="secondary", use_container_width=True):
                         with st.spinner("Generating PDF labels..."):
                             pdf_files = []
+                            saved_paths = []
                             for idx, row in edited_df.iterrows():
                                 row_data = row.to_dict()
                                 label_size = row_data.get('Label Size', DEFAULT_LABEL_SIZE)
@@ -662,17 +684,24 @@ def main():
                                 img_width_pt = generator.total_width_mm * 72 / 25.4
                                 img_height_pt = generator.total_height_mm * 72 / 25.4
 
-                                c = canvas.Canvas(pdf_buffer, pagesize=(img_width_pt, img_height_pt))
+                                pdf_canvas = canvas.Canvas(pdf_buffer, pagesize=(img_width_pt, img_height_pt))
                                 img_buffer = BytesIO()
                                 img.save(img_buffer, format='PNG')
                                 img_buffer.seek(0)
-                                c.drawImage(ImageReader(img_buffer), 0, 0, width=img_width_pt, height=img_height_pt)
-                                c.save()
+                                pdf_canvas.drawImage(ImageReader(img_buffer), 0, 0, width=img_width_pt, height=img_height_pt)
+                                pdf_canvas.save()
                                 pdf_buffer.seek(0)
 
                                 filename = f"label_{idx+1}_{row_data.get('product_description', 'unknown')}.pdf"
-                                filename = "".join(c if c.isalnum() or c in '-_.' else '_' for c in filename)
+                                filename = "".join(ch if ch.isalnum() or ch in '-_.' else '_' for ch in filename)
                                 pdf_files.append((filename, pdf_buffer.getvalue()))
+
+                                # Also save to output folder if enabled
+                                if save_to_folder:
+                                    filepath = output_pdf_dir / filename
+                                    with open(filepath, 'wb') as f:
+                                        f.write(pdf_buffer.getvalue())
+                                    saved_paths.append(str(filepath))
 
                             # Create ZIP
                             zip_buffer = BytesIO()
@@ -687,6 +716,9 @@ def main():
                                 file_name="dod_labels_pdf.zip",
                                 mime="application/zip"
                             )
+
+                            if save_to_folder and saved_paths:
+                                st.success(f"✅ {len(saved_paths)} PDF files saved to: output/pdf/")
                 else:
                     st.warning("PDF export requires ReportLab library")
 
@@ -694,6 +726,7 @@ def main():
                 if st.button("📦 Download ZIP (All PNGs)", type="primary", use_container_width=True):
                     with st.spinner("Creating ZIP archive..."):
                         zip_buffer = BytesIO()
+                        saved_paths = []
                         with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
                             for idx, row in edited_df.iterrows():
                                 row_data = row.to_dict()
@@ -707,8 +740,14 @@ def main():
                                 img_buffer.seek(0)
 
                                 filename = f"label_{idx+1}_{row_data.get('product_description', 'unknown')}.png"
-                                filename = "".join(c if c.isalnum() or c in '-_.' else '_' for c in filename)
+                                filename = "".join(ch if ch.isalnum() or ch in '-_.' else '_' for ch in filename)
                                 zf.writestr(filename, img_buffer.getvalue())
+
+                                # Also save to output folder if enabled
+                                if save_to_folder:
+                                    filepath = output_png_dir / filename
+                                    img.save(filepath, format='PNG', dpi=(DPI, DPI))
+                                    saved_paths.append(str(filepath))
 
                         zip_buffer.seek(0)
 
@@ -718,6 +757,9 @@ def main():
                             file_name="dod_labels.zip",
                             mime="application/zip"
                         )
+
+                        if save_to_folder and saved_paths:
+                            st.success(f"✅ {len(saved_paths)} PNG files saved to: output/png/")
 
         except Exception as e:
             st.error(f"❌ Error loading file: {str(e)}")

@@ -2,6 +2,7 @@
 __pycache__/
 *.py[cod]
 *$py.class
+*.pyc
 *.so
 .Python
 env/
@@ -13,6 +14,7 @@ build/
 
 # Output files
 output/*.pdf
+output/png/
 !output/.gitkeep
 
 # Data files (uncomment if you want to exclude data)
@@ -33,3 +35,6 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Streamlit cache
+.streamlit/
