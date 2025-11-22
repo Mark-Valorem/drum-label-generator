@@ -191,8 +191,7 @@ class DoDLabelGeneratorPNG:
                 'module_height': height,
                 'module_width': 0.3,
                 'quiet_zone': 3,
-                'font_size': 8,
-                'text_distance': 2,
+                'write_text': False,  # Disable HRI text (prevents overlap)
             })
             buffer.seek(0)
             img = Image.open(buffer)
@@ -214,8 +213,7 @@ class DoDLabelGeneratorPNG:
                 'module_height': height,
                 'module_width': 0.3,
                 'quiet_zone': 3,
-                'font_size': 8,
-                'text_distance': 2,
+                'write_text': False,  # Disable HRI text (prevents overlap)
             })
             buffer.seek(0)
             img = Image.open(buffer)

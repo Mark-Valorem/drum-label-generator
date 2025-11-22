@@ -609,8 +609,10 @@ def generate_code128(self, data):
 
 **Safe to Modify:**
 - `module_height`: Change bar height (recommend 10-15mm)
-- `font_size`: Change HRI text size
-- **DO NOT MODIFY:** `quiet_zone` (ISO requirement), `module_width` (affects scannability)
+- **DO NOT MODIFY:**
+  - `quiet_zone` (ISO requirement)
+  - `module_width` (affects scannability)
+  - **CRITICAL:** `write_text` MUST be `False` - HRI text causes overlaps and is redundant (label already has separate text fields)
 
 #### Code 39 (python-barcode library)
 **Function:** `generate_code39(data)`
@@ -639,8 +641,11 @@ def generate_code39(self, data):
 ```
 
 **Critical:** `add_checksum=False` - Code 39 doesn't require checksum for NIIN
-**Safe to Modify:** Same as Code 128
-**DO NOT MODIFY:** `quiet_zone`, `module_width`
+**Safe to Modify:** `module_height` only
+**DO NOT MODIFY:**
+  - `quiet_zone` (ISO requirement)
+  - `module_width` (affects scannability)
+  - **CRITICAL:** `write_text` MUST be `False` - HRI text causes overlaps and is redundant
 
 #### GS1 Data Matrix (pylibdmtx library)
 **Function:** `generate_datamatrix(row)`
