@@ -1,7 +1,7 @@
 # Drum Label Generator - AI Agent Documentation
 
-**version:** v2.2.0
-**Last Updated:** 2025-11-21
+**version:** v2.2.1
+**Last Updated:** 2025-11-22
 
 ## Project Overview
 
@@ -22,21 +22,33 @@ Generates print-ready PDF and PNG labels from CSV/Excel data with multiple barco
 
 ## Documentation Structure
 
-This project uses a .agent folder for maintaining AI agent context:
+This project uses a **Memory Bank** architecture for maintaining AI agent context:
+
+### Memory Bank (`.claude_docs/`) - PRIMARY REFERENCE
+- **`TECH_STACK.md`** - Dependencies, rendering strategy (PIL rationale), barcode tech
+- **`PROJECT_BRIEF.md`** - Visual specifications, compliance requirements, sample products
+- **`MEMORY.md`** - Key decisions, PIL Rendering Maintenance Plan (CRITICAL before edits)
+- **`PROGRESS.md`** - Version history and changelog
+- **`DECISIONS.md`** - Architecture Decision Records (ADRs)
+
+### Legacy Documentation (`.agent/`)
 - `.agent/tasks/` - Implementation plans and PRDs for completed features
 - `.agent/system/` - Architecture, database schemas, API documentation
 - `.agent/sops/` - Standard operating procedures for common tasks
 - `.agent/README.md` - Master index of all documentation
 - `archive/` - Archived/deprecated files
 
+**IMPORTANT:** Always read `.claude_docs/MEMORY.md` before modifying PIL rendering code (barcode quality critical)
+
 ## Rules for AI Agent
 
-1. **Before Implementation**: Always read `.agent/README.md` first to understand available context
-2. **After Implementation**: Run `/update-doc` to document the work and update SOPs
-3. **On Mistakes**: When corrected, generate SOP to prevent recurrence
-4. **Research Tasks**: Use sub-agents for research-heavy features to isolate context
-5. **After Discrete Tasks**: Run `/compact` to clean conversation history
-6. **Version Control**: All documentation updates automatically commit and push to GitHub
+1. **Before Implementation**: Always read `.claude_docs/MEMORY.md` first (especially for PIL rendering changes)
+2. **Before Rendering Edits**: Review `.claude_docs/MEMORY.md` PIL Maintenance Plan to avoid breaking barcodes
+3. **After Implementation**: Run `/update-doc` to document the work and update SOPs
+4. **On Mistakes**: When corrected, generate SOP to prevent recurrence
+5. **Research Tasks**: Use sub-agents for research-heavy features to isolate context
+6. **After Discrete Tasks**: Run `/compact` to clean conversation history
+7. **Version Control**: All documentation updates automatically commit and push to GitHub
 
 ## Code Style Guidelines
 

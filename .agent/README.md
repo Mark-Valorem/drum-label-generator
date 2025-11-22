@@ -1,8 +1,10 @@
 # .agent Documentation Index
 
-**version:** v1.0.0
-**Last Updated:** 2025-11-14
-**Project:** Drum Label Generator for Valorem Chemicals
+**version:** v2.2.1
+**Last Updated:** 2025-11-22
+**Project:** DoD/NATO Military Label Generator for Valorem Chemicals
+
+**NOTE:** This is legacy documentation. See `.claude_docs/` Memory Bank for current docs (v2.2+).
 
 ## Purpose
 
@@ -18,9 +20,19 @@ This file serves as the master index for all AI agent documentation. Read this f
 
 ## Project Status
 
-**Stage:** Production (v1.0.0)
-**Total Documents:** 2 system docs, 2 SOPs, 0 tasks
-**Last Feature:** Initial .agent documentation system setup
+**Stage:** Production (v2.2.1)
+**Current Version:** v2.2.1 (DoD/NATO labels + Streamlit dashboard + Memory Bank)
+**Total Documents:** 3 system docs, 2 SOPs, 0 tasks
+**Last Feature:** Memory Bank architecture + version control hygiene
+
+## Memory Bank (Primary Reference)
+
+**For v2.2+ documentation, see `.claude_docs/` folder:**
+- **TECH_STACK.md** - Dependencies, PIL rendering rationale, barcode tech
+- **PROJECT_BRIEF.md** - Visual specifications, compliance requirements
+- **MEMORY.md** - Key decisions, PIL Rendering Maintenance Plan (CRITICAL)
+- **PROGRESS.md** - Version history and changelog
+- **DECISIONS.md** - Architecture Decision Records (ADRs)
 
 ---
 
@@ -31,16 +43,25 @@ Core system documentation describing the project architecture and components.
 ### Available System Docs:
 
 #### [architecture.md](.agent/system/architecture.md)
-- Project file structure and organization
+- Project file structure and organization (v1.0 GHS labels - OUTDATED)
 - Main components: DrumLabelGenerator class, config system
 - Data flow: CSV/Excel → Python processing → PDF output
 - Dependencies and their roles
+- **NOTE:** Describes v1.0 GHS system, not current v2.x DoD system
 
 #### [label-layout.md](.agent/system/label-layout.md)
-- A5 label design specifications
+- A5 label design specifications (v1.0 GHS labels)
 - Section breakdown (header, table, pictograms, barcodes, QR codes)
 - Measurements and positioning logic
 - Configuration options in config.py
+
+#### [dod-label-specification.md](.agent/system/dod-label-specification.md) **⭐ CURRENT**
+- DoD/NATO military label specification (v2.0+)
+- 21-field data model with NSN/NIIN tracking
+- 4 barcode symbologies (Code 128, Code 39, Data Matrix)
+- MIL-STD-129, ISO/IEC, GS1 compliance requirements
+- Label layout and barcode technical specs
+- **323 lines of comprehensive specification**
 
 ---
 

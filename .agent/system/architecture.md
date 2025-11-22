@@ -1,12 +1,36 @@
 # System Architecture
 
-**version:** v1.0.0
+**version:** v1.0.0 (LEGACY)
 **Created:** 2025-11-14
 **Last Updated:** 2025-11-14
 
-## Overview
+---
+
+## ⚠️ DEPRECATION NOTICE
+
+**This document describes the v1.0 GHS chemical label system, which is now LEGACY.**
+
+**For current v2.x DoD/NATO label system architecture, see:**
+- `.claude_docs/TECH_STACK.md` - Technical stack and rendering strategy
+- `.claude_docs/PROJECT_BRIEF.md` - Visual design and specifications
+- `.claude_docs/MEMORY.md` - PIL Rendering Maintenance Plan
+- `.agent/system/dod-label-specification.md` - DoD/NATO 21-field spec
+
+**Current System (v2.2.1):**
+- **DoD/NATO Military Labels** (primary focus)
+- 21-field data model with NSN/NIIN tracking
+- 4 barcode symbologies (Code 128 ×2, Code 39, Data Matrix)
+- Dual rendering: ReportLab (PDF) + PIL/Pillow (PNG)
+- Streamlit web dashboard
+- Multiple label sizes (2"×1" to A4)
+
+---
+
+## Overview (v1.0 GHS - LEGACY)
 
 The Drum Label Generator is a Python-based PDF generation system that transforms CSV/Excel product data into GHS-compliant A5 drum labels. The architecture is designed for batch processing with minimal configuration.
+
+**NOTE:** This system is maintained for existing users but v2.x DoD labels are the primary focus.
 
 ## System Components
 
