@@ -1,6 +1,6 @@
 # Project Progress & Version History
 **Project:** DoD/NATO Military Label Generator
-**Current Version:** 2.2.1
+**Current Version:** 2.2.2
 **Last Updated:** 2025-11-22
 
 ---
@@ -9,8 +9,92 @@
 
 ```
 v1.0.0 (2024-11-13) → v2.0.0 (2025-11-15) → v2.1.0 (2025-11-21) →
-v2.1.1 (2025-11-21) → v2.2.0 (2025-11-21) → v2.2.1 (2025-11-22)
+v2.1.1 (2025-11-21) → v2.2.0 (2025-11-21) → v2.2.1 (2025-11-22) → v2.2.2 (2025-11-22)
 ```
+
+---
+
+## v2.2.2 (2025-11-22) - Fix Barcode HRI Text Overlap & Verification
+
+### Type: Bugfix (Visual + Testing)
+
+### Problem 1: Barcode HRI Text Overlap
+Barcode libraries were adding Human-Readable Interpretation (HRI) text below barcodes by default, causing visual overlap with label text fields and messy appearance.
+
+### Solution 1
+Disabled HRI text generation in barcode options by setting `write_text: False` for both Code 128 and Code 39 barcodes.
+
+### Problem 2: verify_barcodes.py Data Matrix Decode Failure
+Data Matrix barcode verification script was failing to decode generated barcodes with TypeError: "too many values to unpack (expected 3)". The issue was incorrect API usage for pylibdmtx `decode()` function.
+
+### Solution 2
+Fixed decode call to pass PIL Image object directly instead of attempting to pass tuple of (pixels, width, height) as separate arguments. The `decode()` function accepts PIL Image, numpy.ndarray, or tuple - not separate parameters.
+
+**Before:**
+```python
+decoded = dmtx_decode(decode_img_gray.tobytes(),
+                      encoded.width,
+                      encoded.height,
+                      max_count=1)
+```
+
+**After:**
+```python
+decoded = dmtx_decode(decode_img_gray, max_count=1)
+```
+
+### Files Modified
+- `dod_label_generator_png.py` - Updated `generate_code128()` and `generate_code39()` functions
+- `dod_label_app.py` - Updated same functions in Streamlit dashboard
+- `verify_barcodes.py` - Fixed Data Matrix decode API call (line 186)
+- `.claude_docs/MEMORY.md` - Added critical rule: `write_text` MUST be `False`
+- `.claude_docs/PROGRESS.md` - This entry
+
+### Verification Results
+All 4 barcode tests now pass with full decode verification:
+- Code 128 (Batch Lot): PASS
+- Code 39 (NIIN): PASS
+- Code 128 (Use by Date): PASS
+- **GS1 Data Matrix: PASS** (now successfully decodes with 2 GS separators verified)
+
+### Changes
+**Before:**
+```python
+barcode_obj.write(buffer, options={
+    'module_height': height,
+    'module_width': 0.3,
+    'quiet_zone': 3,
+    'font_size': 8,         # HRI enabled
+    'text_distance': 2,
+})
+```
+
+**After:**
+```python
+barcode_obj.write(buffer, options={
+    'module_height': height,
+    'module_width': 0.3,
+    'quiet_zone': 3,
+    'write_text': False,    # HRI disabled
+})
+```
+
+### Impact
+- ✅ Cleaner barcode appearance (no overlapping text below bars)
+- ✅ Barcode scannability UNCHANGED (bars remain identical)
+- ✅ Labels already have separate text fields showing batch/NIIN/date data
+- ✅ ISO compliance UNCHANGED (scanners read bars, not HRI text)
+
+### Testing
+- Generated test labels for both products (Fuchs OM-11, DCI 4A)
+- Visual confirmation: No text below barcode bars
+- Barcode scanning: All 4 types still scannable
+
+### Git Branch
+`fix-barcode-text-overlap`
+
+### Breaking Changes
+- None
 
 ---
 

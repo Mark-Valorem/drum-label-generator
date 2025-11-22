@@ -177,12 +177,26 @@ def verify_gs1_datamatrix(nsn, batch_lot, expiry_yymmdd, serial_number=None):
 
         # Attempt to decode (verification)
         try:
-            decoded = dmtx_decode(encoded.pixels, (encoded.width, encoded.height))
+            # Create a PIL Image from the encoded data for decoding
+            decode_img = Image.frombytes('RGB', (encoded.width, encoded.height), encoded.pixels)
+            # Convert to grayscale for better decoding
+            decode_img_gray = decode_img.convert('L')
+
+            # pylibdmtx decode API: accepts PIL Image directly
+            decoded = dmtx_decode(decode_img_gray, max_count=1)
             if decoded:
                 decoded_data = decoded[0].data.decode('utf-8')
+                decoded_display = decoded_data.replace(GS, '<GS>')
                 print(f"\n[OK] Data Matrix verified by decoding")
-                print(f"  Decoded data: {decoded_data}")
+                print(f"  Decoded data: {decoded_display}")
                 print(f"  Match: {'YES' if decoded_data == gs1_data else 'NO'}")
+
+                # Verify GS separators are present
+                if GS in decoded_data:
+                    gs_count = decoded_data.count(GS)
+                    print(f"  GS separators found: {gs_count}")
+                else:
+                    print(f"  [WARN] No GS separators found in decoded data")
             else:
                 print(f"\n[WARN] Could not decode generated Data Matrix (may still be valid)")
         except Exception as decode_err:
