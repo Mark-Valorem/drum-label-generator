@@ -310,6 +310,7 @@ class DoDLabelGenerator:
         nato_stock = self.safe_str(row.get('nato_stock_no', ''), '-')
         niin = ''.join(filter(str.isdigit, nato_stock))[-9:] if nato_stock != '-' else '000000000'
         unit_issue = self.safe_str(row.get('unit_of_issue', ''), 'DR')
+        hazmat_code = self.safe_str(row.get('hazardous_material_code', ''), '-')  # Need this for header
 
         # NIIN Barcode (Code 39)
         niin_barcode = self.generate_code39(niin)
@@ -331,6 +332,39 @@ class DoDLabelGenerator:
         draw.text((unit_x, y_pos), "Unit: ", fill='black', font=font_small)
         unit_label_width = draw.textbbox((0, 0), "Unit: ", font=font_small)[2]
         draw.text((unit_x + unit_label_width, y_pos), unit_issue, fill='black', font=font_data)
+
+        # Hazard Box (between Unit and GS1 Data Matrix)
+        # Only draw if hazmat_code is not "-" or empty
+        if hazmat_code and hazmat_code != '-':
+            # Position hazard box to the right of Unit
+            unit_text_width = draw.textbbox((0, 0), unit_issue, font=font_data)[2]
+            hazard_x = unit_x + unit_label_width + unit_text_width + mm_to_px(3, self.dpi)
+
+            # Draw "HAZARD" label above box
+            hazard_label = "HAZARD"
+            hazard_label_bbox = draw.textbbox((hazard_x, y_pos), hazard_label, font=font_small)
+            draw.text((hazard_x, y_pos), hazard_label, fill='black', font=font_small)
+
+            # Calculate box position below "HAZARD" text
+            box_y = hazard_label_bbox[3] + mm_to_px(0.5, self.dpi)
+            box_size = mm_to_px(5, self.dpi)  # Smaller square box for compact layout
+
+            # Draw filled black square
+            draw.rectangle(
+                [hazard_x, box_y, hazard_x + box_size, box_y + box_size],
+                fill='black',
+                outline='black',
+                width=1
+            )
+
+            # Draw class number in WHITE centered in box
+            # Calculate text position to center it
+            class_num_bbox = draw.textbbox((0, 0), hazmat_code, font=font_data)
+            text_w = class_num_bbox[2] - class_num_bbox[0]
+            text_h = class_num_bbox[3] - class_num_bbox[1]
+            text_x = hazard_x + (box_size - text_w) // 2
+            text_y = box_y + (box_size - text_h) // 2
+            draw.text((text_x, text_y), hazmat_code, fill='white', font=font_data)
 
         # GS1 Data Matrix (far right) - AI 7001 (NSN) + AI 10 (Batch) + AI 17 (Expiry)
         datamatrix = self.generate_gs1_datamatrix(
@@ -421,7 +455,7 @@ class DoDLabelGenerator:
         spec = self.safe_str(row.get('specification', ''), '-')
         capacity = self.safe_str(row.get('capacity_net_weight', ''), '-')
         test_report = self.safe_str(row.get('test_report_no', ''), '-')
-        hazmat_code = self.safe_str(row.get('hazardous_material_code', ''), '-')
+        # hazmat_code already defined earlier for header rendering (line 313)
 
         table_data = [
             ('NATO Code / JSD:', f"{nato_code}|{jsd_ref}"),  # Req 7: Use internal separator for inline rendering
@@ -431,7 +465,7 @@ class DoDLabelGenerator:
             ('Capacity/Net Weight:', capacity),
             ('Re-Test Date:', use_by_date),
             ('Test Report No.:', test_report),
-            ('Hazardous Material Code:', hazmat_code),  # Req 5: Always display (default "-")
+            # Hazardous Material Code removed - now shown in header hazard box
         ]
 
         row_height = self.FONT_SIZE_DATA + mm_to_px(2, self.dpi)

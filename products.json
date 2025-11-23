@@ -40,7 +40,7 @@
     "capacity_weight": "55 US GAL",
     "shelf_life_months": 24,
     "batch_lot_managed": "Y",
-    "hazardous_material_code": "UN1307, 3, III",
+    "hazardous_material_code": "3",
     "contractor_details": "Valorem Chemicals Pty Ltd|123 Industrial Drive|Sydney NSW 2000|Australia",
     "safety_markings": "UN1307, Flammable Liquid, Class 3, PG III"
   }

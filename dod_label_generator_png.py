@@ -339,6 +339,39 @@ class DoDLabelGeneratorPNG:
         unit_label_width = draw.textbbox((0, 0), "Unit: ", font=font_small)[2]
         draw.text((unit_x + unit_label_width, y_pos), unit_issue, fill='black', font=font_data)
 
+        # Hazard Box (between Unit and GS1 Data Matrix)
+        # Only draw if hazmat_code is not "-" or empty
+        if hazmat_code and hazmat_code != '-':
+            # Position hazard box to the right of Unit
+            unit_text_width = draw.textbbox((0, 0), unit_issue, font=font_data)[2]
+            hazard_x = unit_x + unit_label_width + unit_text_width + mm_to_px(5, self.dpi)
+
+            # Draw "HAZARD" label above box
+            hazard_label = "HAZARD"
+            hazard_label_bbox = draw.textbbox((hazard_x, y_pos), hazard_label, font=font_tiny)
+            draw.text((hazard_x, y_pos), hazard_label, fill='black', font=font_tiny)
+
+            # Calculate box position below "HAZARD" text
+            box_y = hazard_label_bbox[3] + mm_to_px(1, self.dpi)
+            box_size = mm_to_px(8, self.dpi)  # Square box
+
+            # Draw filled black square
+            draw.rectangle(
+                [hazard_x, box_y, hazard_x + box_size, box_y + box_size],
+                fill='black',
+                outline='black',
+                width=2
+            )
+
+            # Draw class number in WHITE centered in box
+            # Calculate text position to center it
+            class_num_bbox = draw.textbbox((0, 0), hazmat_code, font=font_data)
+            text_w = class_num_bbox[2] - class_num_bbox[0]
+            text_h = class_num_bbox[3] - class_num_bbox[1]
+            text_x = hazard_x + (box_size - text_w) // 2
+            text_y = box_y + (box_size - text_h) // 2
+            draw.text((text_x, text_y), hazmat_code, fill='white', font=font_data)
+
         # GS1 Data Matrix (far right)
         datamatrix = self.generate_gs1_datamatrix(
             nato_stock,
@@ -439,7 +472,7 @@ class DoDLabelGeneratorPNG:
             ('Capacity or Net Weight', capacity),
             ('Re-Test Date NATO/JSD', use_by_date),
             ('Test Report No.', test_report),
-            ('Hazardous Material Code', hazmat_code),  # Req 5: Always display (default "-")
+            # Hazardous Material Code removed - now shown in header hazard box
         ]
 
         row_height = self.FONT_SIZE_DATA + mm_to_px(4, self.dpi)
