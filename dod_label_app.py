@@ -2,7 +2,7 @@
 """
 DoD/NATO Label Generator - Streamlit Web Dashboard
 Generates military specification labels with web interface
-Version 2.3.0 - JSON SKU Database
+Version 2.4.0 - Product Manager Feature
 """
 
 import os
@@ -306,7 +306,9 @@ class DoDLabelGenerator:
         y_pos += mm_to_px(1, self.dpi)
 
         # ===== SECTION 2: NIIN BARCODE ROW =====
-        niin = self.safe_str(row.get('niin', ''), '000000000')
+        # Calculate NIIN from NSN (last 9 digits, strip all dashes and spaces)
+        nato_stock = self.safe_str(row.get('nato_stock_no', ''), '-')
+        niin = ''.join(filter(str.isdigit, nato_stock))[-9:] if nato_stock != '-' else '000000000'
         unit_issue = self.safe_str(row.get('unit_of_issue', ''), 'DR')
 
         # NIIN Barcode (Code 39)
@@ -544,6 +546,273 @@ class DoDLabelGenerator:
 # STREAMLIT APP
 # =============================================================================
 
+def show_product_manager(products_db, products_file):
+    """Display the product management view"""
+    import pandas as pd
+
+    st.title("🗂️ Product Manager")
+    st.markdown("Manage your product SKU database")
+
+    # Display current products in a table
+    st.markdown("### 📋 Current Products")
+
+    if products_db:
+        # Convert to DataFrame for display
+        df = pd.DataFrame(products_db)
+
+        # Reorder columns for better display
+        display_columns = ['id', 'product_name', 'nsn', 'unit_of_issue', 'capacity_weight',
+                          'shelf_life_months', 'nato_code', 'jsd_reference']
+        available_columns = [col for col in display_columns if col in df.columns]
+
+        st.dataframe(
+            df[available_columns],
+            use_container_width=True,
+            hide_index=True
+        )
+
+        st.info(f"📊 Total Products: {len(products_db)}")
+    else:
+        st.warning("No products in database")
+
+    st.markdown("---")
+
+    # Add/Edit Product Form
+    st.markdown("### ➕ Add / Edit Product")
+
+    # Select mode: Add new or Edit existing
+    col1, col2 = st.columns([1, 3])
+    with col1:
+        mode = st.radio("Mode:", ["Add New", "Edit Existing"], horizontal=False)
+
+    with col2:
+        if mode == "Edit Existing" and products_db:
+            product_ids = [p['id'] for p in products_db]
+            selected_id = st.selectbox("Select Product to Edit:", product_ids)
+            selected_product = next((p for p in products_db if p['id'] == selected_id), None)
+        else:
+            selected_product = None
+
+    # Product form
+    with st.form("product_form"):
+        st.markdown("#### Product Information")
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            product_id = st.text_input(
+                "Product ID *",
+                value=selected_product['id'] if selected_product else "",
+                help="Unique identifier (e.g., OM11_20L)",
+                disabled=(mode == "Edit Existing")
+            )
+
+            product_name = st.text_input(
+                "Product Name *",
+                value=selected_product['product_name'] if selected_product else "",
+                help="Product name (e.g., Fuchs OM-11)"
+            )
+
+            nsn = st.text_input(
+                "NSN *",
+                value=selected_product['nsn'] if selected_product else "",
+                help="NATO Stock Number (format: nnnn-nn-nnn-nnnn)"
+            )
+
+            nato_code = st.text_input(
+                "NATO Code",
+                value=selected_product.get('nato_code', '-') if selected_product else "-",
+                help="NATO code or '-' if not applicable"
+            )
+
+            jsd_reference = st.text_input(
+                "JSD Reference",
+                value=selected_product.get('jsd_reference', '-') if selected_product else "-",
+                help="Joint Service Designation reference"
+            )
+
+            specification = st.text_input(
+                "Specification *",
+                value=selected_product.get('specification', '') if selected_product else "",
+                help="Product specification (e.g., DEF STAN 91-39 Issue 4)"
+            )
+
+        with col2:
+            unit_of_issue = st.text_input(
+                "Unit of Issue *",
+                value=selected_product.get('unit_of_issue', 'DR') if selected_product else "DR",
+                help="Unit type (e.g., DR for Drum, CN for Can)"
+            )
+
+            capacity_weight = st.text_input(
+                "Capacity/Weight *",
+                value=selected_product.get('capacity_weight', '') if selected_product else "",
+                help="Pack size (e.g., 20 LI, 55 US GAL)"
+            )
+
+            shelf_life_months = st.number_input(
+                "Shelf Life (months) *",
+                min_value=1,
+                max_value=120,
+                value=selected_product.get('shelf_life_months', 24) if selected_product else 24,
+                help="Shelf life in months"
+            )
+
+            batch_lot_managed = st.selectbox(
+                "Batch Lot Managed *",
+                options=["Y", "N"],
+                index=0 if (selected_product and selected_product.get('batch_lot_managed') == 'Y') else 1,
+                help="Is this product batch/lot managed?"
+            )
+
+            hazardous_material_code = st.text_input(
+                "Hazardous Material Code",
+                value=selected_product.get('hazardous_material_code', '-') if selected_product else "-",
+                help="UN code or '-' if not hazardous (e.g., UN1307, 3, III)"
+            )
+
+        st.markdown("#### Contractor Details")
+        contractor_details = st.text_area(
+            "Contractor Details *",
+            value=selected_product.get('contractor_details', '') if selected_product else
+                  "Valorem Chemicals Pty Ltd|123 Industrial Drive|Sydney NSW 2000|Australia",
+            help="Pipe-separated: Company|Address|City|Country"
+        )
+
+        st.markdown("#### Safety Information")
+        safety_markings = st.text_area(
+            "Safety/Movement Markings",
+            value=selected_product.get('safety_markings', '-') if selected_product else "-",
+            help="Safety markings or '-' if not applicable"
+        )
+
+        # Submit button
+        submitted = st.form_submit_button(
+            "💾 Save Product" if mode == "Add New" else "💾 Update Product",
+            type="primary",
+            use_container_width=True
+        )
+
+        if submitted:
+            # Validate required fields
+            if not all([product_id, product_name, nsn, specification, unit_of_issue,
+                       capacity_weight, contractor_details]):
+                st.error("❌ Please fill in all required fields (marked with *)")
+            else:
+                # Create product object
+                new_product = {
+                    "id": product_id.strip(),
+                    "product_name": product_name.strip(),
+                    "nsn": nsn.strip(),
+                    "nato_code": nato_code.strip(),
+                    "jsd_reference": jsd_reference.strip(),
+                    "specification": specification.strip(),
+                    "unit_of_issue": unit_of_issue.strip(),
+                    "capacity_weight": capacity_weight.strip(),
+                    "shelf_life_months": int(shelf_life_months),
+                    "batch_lot_managed": batch_lot_managed,
+                    "hazardous_material_code": hazardous_material_code.strip(),
+                    "contractor_details": contractor_details.strip(),
+                    "safety_markings": safety_markings.strip()
+                }
+
+                # Validate NSN format (basic check)
+                if len(nsn.replace('-', '')) != 13 or not all(c.isdigit() or c == '-' for c in nsn):
+                    st.error("❌ NSN must be 13 digits in format: nnnn-nn-nnn-nnnn")
+                else:
+                    # Save to database
+                    try:
+                        if mode == "Add New":
+                            # Check for duplicate ID
+                            if any(p['id'] == product_id for p in products_db):
+                                st.error(f"❌ Product ID '{product_id}' already exists!")
+                            else:
+                                products_db.append(new_product)
+                                save_products_json(products_db, products_file)
+                                st.success(f"✅ Product '{product_name}' added successfully!")
+                                st.rerun()
+                        else:  # Edit mode
+                            # Find and update existing product
+                            for i, p in enumerate(products_db):
+                                if p['id'] == product_id:
+                                    products_db[i] = new_product
+                                    break
+                            save_products_json(products_db, products_file)
+                            st.success(f"✅ Product '{product_name}' updated successfully!")
+                            st.rerun()
+                    except Exception as e:
+                        st.error(f"❌ Error saving product: {e}")
+
+    # Delete Product Section
+    if products_db:
+        st.markdown("---")
+        st.markdown("### 🗑️ Delete Product")
+
+        col1, col2, col3 = st.columns([2, 1, 2])
+
+        with col1:
+            product_to_delete = st.selectbox(
+                "Select product to delete:",
+                options=[p['id'] for p in products_db],
+                key="delete_selector"
+            )
+
+        with col2:
+            st.write("")  # Spacer
+            st.write("")  # Spacer
+            if st.button("🗑️ Delete", type="secondary", use_container_width=True):
+                st.session_state['confirm_delete'] = product_to_delete
+
+        with col3:
+            if 'confirm_delete' in st.session_state and st.session_state['confirm_delete'] == product_to_delete:
+                st.warning(f"⚠️ Confirm deletion of '{product_to_delete}'?")
+                col_yes, col_no = st.columns(2)
+                with col_yes:
+                    if st.button("✅ Yes, Delete", type="primary", use_container_width=True):
+                        try:
+                            products_db = [p for p in products_db if p['id'] != product_to_delete]
+                            save_products_json(products_db, products_file)
+                            st.success(f"✅ Product '{product_to_delete}' deleted!")
+                            del st.session_state['confirm_delete']
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"❌ Error deleting product: {e}")
+                with col_no:
+                    if st.button("❌ Cancel", use_container_width=True):
+                        del st.session_state['confirm_delete']
+                        st.rerun()
+
+
+def save_products_json(products_db, products_file):
+    """Safely save products database to JSON file with atomic write"""
+    import tempfile
+    import shutil
+
+    # Create backup
+    backup_file = products_file.with_suffix('.json.bak')
+    if products_file.exists():
+        shutil.copy2(products_file, backup_file)
+
+    try:
+        # Write to temporary file first
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json') as tmp_file:
+            json.dump(products_db, tmp_file, indent=2, ensure_ascii=False)
+            tmp_path = Path(tmp_file.name)
+
+        # Atomic rename (overwrites existing file)
+        shutil.move(str(tmp_path), str(products_file))
+
+        # Remove backup if successful
+        if backup_file.exists():
+            backup_file.unlink()
+
+    except Exception as e:
+        # Restore from backup if write failed
+        if backup_file.exists():
+            shutil.copy2(backup_file, products_file)
+        raise e
+
+
 def main():
     """Main Streamlit app"""
 
@@ -555,8 +824,17 @@ def main():
         initial_sidebar_state="expanded"
     )
 
-    # Dark/light mode toggle in sidebar
+    # Sidebar navigation
     with st.sidebar:
+        st.title("🧭 Navigation")
+        page = st.radio(
+            "Select View:",
+            ["Generate Label", "Manage Products"],
+            index=0,
+            help="Switch between label generation and product management"
+        )
+
+        st.markdown("---")
         st.title("⚙️ Settings")
 
         # Theme toggle (CSS-based)
@@ -584,7 +862,7 @@ def main():
         """)
 
         st.markdown("---")
-        st.markdown("**v2.3.0** | Valorem Chemicals")
+        st.markdown("**v2.4.0** | Valorem Chemicals")
 
     # Apply dark mode CSS
     if dark_mode:
@@ -593,10 +871,6 @@ def main():
         .stApp { background-color: #1E1E1E; color: #FFFFFF; }
         </style>
         """, unsafe_allow_html=True)
-
-    # Title
-    st.title("🏷️ DoD/NATO Label Generator")
-    st.markdown("Generate military specification labels with 4 barcode types per MIL-STD-129")
 
     # Load products database
     products_file = Path("products.json")
@@ -616,10 +890,22 @@ def main():
         st.error("❌ products.json is empty!")
         st.stop()
 
+    # Route to selected page
+    if page == "Generate Label":
+        show_label_generator(products_db)
+    elif page == "Manage Products":
+        show_product_manager(products_db, products_file)
+
+
+def show_label_generator(products_db):
+    """Display the label generation view"""
+    st.title("🏷️ DoD/NATO Label Generator")
+    st.markdown("Generate military specification labels with 4 barcode types per MIL-STD-129")
+
     # Create product selector options
     product_options = {}
     for product in products_db:
-        display_name = f"{product['product_name']} ({product['unit_of_issue']})"
+        display_name = f"{product['product_name']} ({product['capacity_weight']})"
         product_options[display_name] = product
 
     # Product Selection Section
@@ -640,8 +926,10 @@ def main():
             st.write(f"**NSN:** {selected_product['nsn']}")
             st.write(f"**NATO Code:** {selected_product['nato_code']}")
             st.write(f"**JSD Reference:** {selected_product['jsd_reference']}")
+            st.write(f"**Unit of Issue:** {selected_product['unit_of_issue']}")
         with col2:
             st.write(f"**Specification:** {selected_product['specification']}")
+            st.write(f"**Capacity/Weight:** {selected_product['capacity_weight']}")
             st.write(f"**Shelf Life:** {selected_product['shelf_life_months']} months")
             st.write(f"**Batch Lot Managed:** {selected_product['batch_lot_managed']}")
             st.write(f"**Hazmat Code:** {selected_product['hazardous_material_code']}")
