@@ -1,6 +1,6 @@
 # Project Progress & Version History
 **Project:** DoD/NATO Military Label Generator
-**Current Version:** 2.3.0
+**Current Version:** 2.4.0
 **Last Updated:** 2025-11-23
 
 ---
@@ -10,8 +10,284 @@
 ```
 v1.0.0 (2024-11-13) → v2.0.0 (2025-11-15) → v2.1.0 (2025-11-21) →
 v2.1.1 (2025-11-21) → v2.2.0 (2025-11-21) → v2.2.1 (2025-11-22) →
-v2.2.2 (2025-11-22) → v2.2.3 (2025-11-22) → v2.2.4 (2025-11-22) → v2.3.0 (2025-11-23)
+v2.2.2 (2025-11-22) → v2.2.3 (2025-11-22) → v2.2.4 (2025-11-22) →
+v2.3.0 (2025-11-23) → v2.3.1 (2025-11-23) → v2.4.0 (2025-11-23)
 ```
+
+---
+
+## v2.4.0 (2025-11-23) - Product Manager & UI Overhaul
+
+### Type: Major Feature (Product Management)
+
+### Overview
+Implemented comprehensive web-based Product Manager for CRUD operations on `products.json` database. Adds sidebar navigation, product table display, add/edit/delete forms with validation, and atomic write safety for data integrity. Also includes bug fixes for NIIN calculation and unit_of_issue field mapping (v2.3.1).
+
+### Major Changes
+
+#### 1. Sidebar Navigation
+**File:** `dod_label_app.py`
+
+**Added:**
+- Radio button navigation in sidebar
+- Two views: "Generate Label" (existing) and "Manage Products" (new)
+- Seamless integration with existing settings/help sections
+
+**Implementation:**
+```python
+page = st.radio("Select View:", ["Generate Label", "Manage Products"])
+
+if page == "Generate Label":
+    show_label_generator(products_db)
+elif page == "Manage Products":
+    show_product_manager(products_db, products_file)
+```
+
+#### 2. Product Manager View
+**File:** `dod_label_app.py` (new function: `show_product_manager()`)
+
+**Features:**
+- **Product Table:** DataFrame display of all products with key fields
+- **Add/Edit Form:** Two modes (Add New / Edit Existing)
+  - All 13 product fields with validation
+  - NSN format validation (13 digits)
+  - Duplicate ID prevention
+  - Required field enforcement
+- **Delete Function:** Two-step confirmation process
+  - Select product from dropdown
+  - Confirm deletion with warning message
+  - Prevents accidental deletions
+
+**Form Fields:**
+- Product ID*, Name*, NSN*, NATO Code, JSD Reference
+- Specification*, Unit of Issue*, Capacity/Weight*
+- Shelf Life*, Batch Lot Managed*, Hazmat Code
+- Contractor Details*, Safety Markings
+
+#### 3. Atomic Write Safety
+**File:** `dod_label_app.py` (new function: `save_products_json()`)
+
+**Implementation:**
+```python
+def save_products_json(products_db, products_file):
+    # 1. Create backup
+    backup_file = products_file.with_suffix('.json.bak')
+    shutil.copy2(products_file, backup_file)
+
+    # 2. Write to temp file
+    with tempfile.NamedTemporaryFile(...) as tmp:
+        json.dump(products_db, tmp, ...)
+        tmp_path = Path(tmp.name)
+
+    # 3. Atomic rename
+    shutil.move(str(tmp_path), str(products_file))
+
+    # 4. Remove backup
+    backup_file.unlink()
+
+    # Error: Restore from backup
+    except Exception:
+        shutil.copy2(backup_file, products_file)
+        raise
+```
+
+**Safety Features:**
+- Backup created before write
+- Temporary file for safe writing
+- Atomic rename (all-or-nothing)
+- Automatic rollback on error
+
+#### 4. Bug Fixes (v2.3.1)
+**Branch:** `fix-json-mapping`
+
+**BUG 1: NIIN Calculation Fixed**
+- **Problem:** NIIN showing "000000000" instead of correct value
+- **Root Cause:** Code reading non-existent `niin` field instead of calculating from NSN
+- **Solution:** Calculate NIIN from NSN using `''.join(filter(str.isdigit, nsn))[-9:]`
+- **Result:** DCI 4A now shows correct NIIN "992245252" from NSN "6850-99-224-5252"
+
+**BUG 2: Unit of Issue Field Mapping**
+- **Problem:** products.json had pack sizes in `unit_of_issue` field (e.g., "20 LI", "55 US GAL")
+- **Root Cause:** Incorrect field values during JSON database creation
+- **Solution:** Updated all products to `unit_of_issue: "DR"`, kept pack sizes in `capacity_weight`
+- **Result:** Labels now correctly show "Unit: DR" in header, pack size in Field 10
+
+**UI IMPROVEMENT: Product Details Display**
+- Added "Unit of Issue" and "Capacity/Weight" to product details expander
+- Allows visual verification of correct field values
+
+### Files Created
+1. **`PRODUCT_MANAGER_IMPLEMENTATION.md`** - Comprehensive feature documentation
+2. **`test_dci4a_fixes.py`** - Automated test for NIIN and unit_of_issue bug fixes
+
+### Files Modified
+1. **`dod_label_app.py`** - Major refactor and feature addition
+   - Version updated: v2.3.0 → v2.4.0
+   - Added sidebar navigation (lines 560-568)
+   - Refactored main() to route to views (lines 626-630)
+   - Added show_product_manager() function (~235 lines)
+   - Added save_products_json() function (~28 lines)
+   - Refactored label generation into show_label_generator()
+   - Fixed NIIN calculation (lines 308-312)
+   - Updated product selector to show capacity (line 641)
+   - Added product details UI fields (lines 645, 648)
+
+2. **`products.json`** - Field value corrections
+   - Changed `unit_of_issue` from pack sizes to "DR" for all 3 products
+   - Preserved pack sizes in `capacity_weight` field
+
+3. **`.claude_docs/MEMORY.md`** - Documentation updates
+   - Added "Product Management Workflow (v2.4.0+)" section
+   - Documented Product Manager GUI features
+   - Documented Atomic Write safety pattern
+   - Added user workflows and technical notes
+
+4. **`.claude_docs/PROGRESS.md`** - This entry
+
+### Code Refactoring
+
+**Main Function Restructure:**
+```python
+# BEFORE (v2.3.0):
+def main():
+    # All label generation UI code inline
+    # ... 200+ lines ...
+
+# AFTER (v2.4.0):
+def main():
+    # Load products database
+    # Route to selected view
+
+def show_label_generator(products_db):
+    # Label generation UI (refactored)
+
+def show_product_manager(products_db, products_file):
+    # Product management UI (new)
+
+def save_products_json(products_db, products_file):
+    # Safe file writing (new)
+```
+
+### Breaking Changes
+- None (new features additive, existing functionality preserved)
+
+### Testing
+
+**Automated Tests:**
+```bash
+python test_dci4a_fixes.py
+```
+
+**Test Results:**
+```
+✅ NIIN calculation: 992245252 (correct)
+✅ Unit of Issue: DR (correct)
+✅ Capacity shown in Field 10: 55 US GAL (correct)
+✅ Label generation successful
+✅ PNG output: test_dci4a_fixes_20251123_212013.png
+```
+
+**Manual Testing:**
+- [x] Module imports successfully
+- [x] Sidebar navigation works
+- [x] Product table displays all 3 products
+- [x] Add New mode shows blank form
+- [x] Edit Existing mode loads product data
+- [x] NSN validation rejects invalid formats
+- [x] Duplicate ID check prevents duplicates
+- [x] Delete confirmation workflow works
+- [x] products.json updates atomically
+- [x] Existing label generation still works
+
+### User Workflows
+
+**Managing Products:**
+1. Open Streamlit app: `streamlit run dod_label_app.py`
+2. Click "Manage Products" in sidebar
+3. View product table
+4. Add/Edit/Delete products using forms
+5. Changes save immediately with atomic writes
+
+**Generating Labels:**
+1. Click "Generate Label" in sidebar
+2. Select product from dropdown
+3. Enter batch lot and manufacturing date
+4. Generate and download label
+
+### Benefits
+
+**Data Integrity:**
+- Atomic writes prevent corruption
+- Backup/restore on errors
+- Validation prevents bad data
+
+**User Experience:**
+- No manual JSON editing required
+- Form validation prevents errors
+- Visual feedback (success/error messages)
+- Two-step delete confirmation
+
+**Maintainability:**
+- GUI-based product management
+- No risk of JSON syntax errors
+- Centralized product database
+- Easy to add/modify products
+
+### Security Features
+
+1. **Atomic Writes:** All-or-nothing file updates
+2. **Backup System:** Auto-backup before writes
+3. **Rollback on Error:** Restores from backup if write fails
+4. **Input Validation:** NSN format, required fields, duplicate IDs
+5. **Confirmation Dialog:** Two-step deletion prevents accidents
+
+### Git Branches
+- `fix-json-mapping` - NIIN and unit_of_issue bug fixes (v2.3.1)
+- `feat-product-editor` - Product Manager feature (v2.4.0)
+- Both merged to `main`
+
+### Compliance Impact
+- ✅ MIL-STD-129: All 21 fields still supported
+- ✅ ISO barcode standards: Unchanged
+- ✅ GS1 Data Matrix: Unchanged (NSN + Batch + Expiry)
+- ✅ Field mappings: Corrected (unit_of_issue vs capacity_weight)
+
+### Documentation Updates
+**MEMORY.md:**
+- Added "Product Management Workflow (v2.4.0+)" section
+- Documented GUI features and atomic write pattern
+- User workflows and technical notes
+- Common mistakes to avoid
+
+**PROGRESS.md:**
+- This comprehensive v2.4.0 entry
+
+**PRODUCT_MANAGER_IMPLEMENTATION.md:**
+- Complete feature documentation
+- Testing checklist
+- Security features
+- Future enhancements
+
+---
+
+## v2.3.1 (2025-11-23) - Field Mapping Bug Fixes
+
+### Type: Bugfix (Data Integrity)
+
+### Overview
+Critical bug fixes for NIIN calculation and unit_of_issue field mapping. Merged into v2.4.0 release.
+
+### Fixes
+1. **NIIN Calculation:** Changed from reading non-existent field to calculating from NSN
+2. **Unit of Issue:** Corrected products.json values from pack sizes to unit types
+3. **UI Visibility:** Added unit_of_issue and capacity_weight to product details display
+
+### Files Modified
+- `dod_label_app.py` - NIIN calculation fix
+- `products.json` - unit_of_issue field corrections
+- `test_dci4a_fixes.py` - Automated test script (new)
+
+**See v2.4.0 above for complete details.**
 
 ---
 

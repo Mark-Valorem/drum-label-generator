@@ -1204,6 +1204,174 @@ streamlit run dod_label_app.py
 
 ---
 
+## Product Management Workflow (v2.4.0+)
+
+### Product Manager GUI Overview
+
+**Version:** Introduced in v2.4.0
+**Access:** Streamlit App → Sidebar → "Manage Products"
+**Purpose:** Web-based GUI for CRUD operations on `products.json` database
+
+### Features
+
+#### 1. Product Table Display
+- Shows all products in DataFrame format
+- Columns: ID, Product Name, NSN, Unit of Issue, Capacity, Shelf Life, NATO Code, JSD Reference
+- Real-time view of database contents
+- Product count indicator
+
+#### 2. Add/Edit Product Form
+**Two Modes:**
+- **Add New:** Create new product entry with unique ID
+- **Edit Existing:** Modify existing product (ID field disabled)
+
+**Form Fields (All Validated):**
+- Product ID* (unique identifier, format: `PRODUCTCODE_SIZE`)
+- Product Name* (e.g., "Fuchs OM-11")
+- NSN* (13 digits, format: `nnnn-nn-nnn-nnnn`)
+- NATO Code (or "-")
+- JSD Reference (or "-")
+- Specification* (e.g., "DEF STAN 91-39 Issue 4")
+- Unit of Issue* (e.g., "DR" for Drum, "CN" for Can)
+- Capacity/Weight* (e.g., "20 LI", "55 US GAL")
+- Shelf Life (months)* (1-120 range)
+- Batch Lot Managed* (Y/N dropdown)
+- Hazardous Material Code (UN code or "-")
+- Contractor Details* (pipe-separated format)
+- Safety/Movement Markings (or "-")
+
+**Validation Rules:**
+- Required fields must be filled
+- NSN must be exactly 13 digits (dashes optional)
+- Product ID must be unique for new products
+- All text fields trimmed of whitespace
+
+#### 3. Delete Product
+- Select product from dropdown
+- Two-step confirmation process:
+  1. Click "Delete" button
+  2. Confirm with "Yes, Delete" or "Cancel"
+- Warning message displays product ID
+- Prevents accidental deletions
+
+### Atomic Write Safety Feature
+
+**CRITICAL:** All `products.json` updates use atomic write pattern to prevent data corruption.
+
+**Safe Write Process:**
+```python
+def save_products_json(products_db, products_file):
+    """Safely save with backup/restore capability"""
+
+    # Step 1: Create backup
+    backup_file = products_file.with_suffix('.json.bak')
+    shutil.copy2(products_file, backup_file)
+
+    # Step 2: Write to temporary file
+    with tempfile.NamedTemporaryFile(mode='w', delete=False) as tmp:
+        json.dump(products_db, tmp, indent=2, ensure_ascii=False)
+        tmp_path = Path(tmp.name)
+
+    # Step 3: Atomic rename (overwrites original)
+    shutil.move(str(tmp_path), str(products_file))
+
+    # Step 4: Remove backup if successful
+    backup_file.unlink()
+
+    # Error handling: Restore from backup if write fails
+    except Exception:
+        if backup_file.exists():
+            shutil.copy2(backup_file, products_file)
+        raise
+```
+
+**Why Atomic Writes Matter:**
+1. **No Partial Writes:** Either entire file writes or nothing changes
+2. **Backup Safety:** Original file preserved until new file verified
+3. **Crash Recovery:** Interrupted writes don't corrupt database
+4. **Rollback on Error:** Automatic restore from backup if write fails
+
+**Temporary Files:**
+- `products.json.bak` - Backup file (exists briefly during write)
+- `temp_XXXXX.json` - Temporary write target (deleted after atomic rename)
+
+### User Workflow
+
+**To Add Product:**
+1. Navigate to "Manage Products" in sidebar
+2. Select "Add New" mode
+3. Fill in product form (all required fields)
+4. Click "💾 Save Product"
+5. Page refreshes, new product appears in table
+
+**To Edit Product:**
+1. Navigate to "Manage Products"
+2. Select "Edit Existing" mode
+3. Choose product from dropdown
+4. Modify desired fields (Product ID disabled)
+5. Click "💾 Update Product"
+6. Page refreshes with updated data
+
+**To Delete Product:**
+1. Navigate to "Manage Products"
+2. Scroll to "Delete Product" section
+3. Select product from dropdown
+4. Click "🗑️ Delete"
+5. Confirm deletion with "✅ Yes, Delete"
+6. Product removed from database
+
+### Technical Notes
+
+**Session State:**
+- `st.session_state['confirm_delete']` tracks deletion confirmation
+- Page auto-refreshes (`st.rerun()`) after save/delete operations
+
+**Data Validation:**
+- NSN format: Checks 13 digits with optional dashes
+- Duplicate ID: Prevents adding product with existing ID
+- Required fields: Validates all mandatory fields filled
+
+**Error Handling:**
+- User-friendly error messages via `st.error()`
+- Success confirmations via `st.success()`
+- Backup restoration on write failures
+
+**File Safety:**
+- Backup created before every write
+- Atomic rename prevents corruption
+- JSON validation before write
+- UTF-8 encoding preserved
+
+### Common Mistakes to Avoid
+
+1. **Don't Edit products.json Directly While App Running:** Use GUI to ensure atomic writes
+2. **Don't Duplicate Product IDs:** Each ID must be unique (validation prevents this)
+3. **Don't Skip Required Fields:** Form validation enforces all required fields
+4. **Don't Use Invalid NSN Format:** Must be 13 digits (e.g., "6850-99-224-5252")
+
+### Migration from Manual JSON Editing
+
+**Old Way (Manual):**
+```bash
+nano products.json  # Edit by hand
+# Risk: Syntax errors, missing fields, corruption
+```
+
+**New Way (GUI):**
+```bash
+streamlit run dod_label_app.py
+# Navigate to "Manage Products"
+# Use form with validation
+```
+
+**Benefits:**
+- Form validation prevents errors
+- Atomic writes prevent corruption
+- No JSON syntax mistakes
+- Immediate visual feedback
+
+---
+
 **For Technical Stack Details, see:** `.claude_docs/TECH_STACK.md`
 **For Visual Specifications, see:** `.claude_docs/PROJECT_BRIEF.md`
 **For Architecture Decisions, see:** `.claude_docs/DECISIONS.md`
