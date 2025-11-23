@@ -10,6 +10,7 @@ import io
 import json
 import zipfile
 from datetime import datetime, timedelta
+from dateutil.relativedelta import relativedelta
 from pathlib import Path
 
 import streamlit as st
@@ -139,7 +140,7 @@ class DoDLabelGenerator:
         try:
             date_obj = datetime.strptime(str(manufacture_date), "%d/%m/%Y")
             months = int(shelf_life_months) if pd.notna(shelf_life_months) else 24
-            expiry_date = date_obj + timedelta(days=months * 30)
+            expiry_date = date_obj + relativedelta(months=months)
             return expiry_date.strftime("%d %b %y").upper(), expiry_date
         except:
             return "N/A", None
@@ -1000,9 +1001,9 @@ def show_label_generator(products_db):
 
         # Calculate default Re-Test Date
         if date_of_manufacture:
-            default_retest_date = date_of_manufacture + timedelta(days=selected_product['shelf_life_months'] * 30)
+            default_retest_date = date_of_manufacture + relativedelta(months=selected_product['shelf_life_months'])
         else:
-            default_retest_date = datetime.now() + timedelta(days=selected_product['shelf_life_months'] * 30)
+            default_retest_date = datetime.now() + relativedelta(months=selected_product['shelf_life_months'])
 
         retest_date = st.date_input(
             "Re-Test Date",
@@ -1012,7 +1013,7 @@ def show_label_generator(products_db):
 
         # Calculate Use by Date (display only)
         if date_of_manufacture:
-            use_by_date = date_of_manufacture + timedelta(days=selected_product['shelf_life_months'] * 30)
+            use_by_date = date_of_manufacture + relativedelta(months=selected_product['shelf_life_months'])
             st.info(f"**Use by Date (Auto):** {use_by_date.strftime('%d %b %y').upper()}\n\n*Calculated: DOM + {selected_product['shelf_life_months']} months (Field 19)*")
         else:
             st.info("**Use by Date:** _Enter manufacturing date first_")

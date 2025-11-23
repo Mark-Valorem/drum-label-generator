@@ -1107,21 +1107,36 @@ This PIL rendering system is **production-ready** and **mission-critical**. Any 
 | (Calculated) | Field 19 | Calculated | DOM + shelf_life |
 | (Calculated) | Field 15 | Calculated | Last 9 digits of NSN |
 
-### Date Calculation Logic (v2.3.0)
+### Date Calculation Logic (v2.4.2+)
+
+**IMPORTANT CHANGE (v2.4.2):** Switched from `timedelta(days=months * 30)` to `relativedelta(months=months)` for accurate month arithmetic.
 
 **Use by Date (Field 19):**
 ```python
-use_by_date = date_of_manufacture + timedelta(days=shelf_life_months * 30)
-# Format: DD MMM YY (e.g., "07 NOV 28")
+from dateutil.relativedelta import relativedelta
+
+use_by_date = date_of_manufacture + relativedelta(months=shelf_life_months)
+# Format: DD MMM YY (e.g., "12 MAY 26")
 # Always calculated, not editable
+# Example: Nov 12 + 18 months = May 12 (exact day preserved)
 ```
 
 **Re-Test Date (Field 13):**
 ```python
-default_retest_date = date_of_manufacture + timedelta(days=shelf_life_months * 30)
+from dateutil.relativedelta import relativedelta
+
+default_retest_date = date_of_manufacture + relativedelta(months=shelf_life_months)
 # User can override via date picker
 # Format: DD/MM/YYYY
+# Example: Nov 15 + 36 months = Nov 15 (exact day preserved)
 ```
+
+**Why relativedelta?**
+- **OLD (v2.3.0):** `timedelta(days=months * 30)` - assumes all months are 30 days
+  - ❌ Nov 12 + 18 months = May 06 (incorrect, off by 6 days)
+- **NEW (v2.4.2):** `relativedelta(months=months)` - accurate calendar month addition
+  - ✅ Nov 12 + 18 months = May 12 (correct, preserves day of month)
+- Handles month-end boundaries intelligently (e.g., Jan 31 + 1 month = Feb 28)
 
 **NIIN Extraction (Field 15):**
 ```python

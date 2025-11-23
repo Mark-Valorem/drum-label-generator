@@ -10,6 +10,9 @@ qrcode==8.2
 # Image processing
 Pillow==10.1.0
 
+# Date arithmetic (accurate month calculations)
+python-dateutil==2.8.2
+
 # DoD/NATO label requirements (v2.x)
 pylibdmtx==0.1.10
 segno==1.6.6

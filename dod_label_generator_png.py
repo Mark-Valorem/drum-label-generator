@@ -11,6 +11,7 @@ import os
 import sys
 import argparse
 from datetime import datetime, timedelta
+from dateutil.relativedelta import relativedelta
 from pathlib import Path
 from io import BytesIO
 
@@ -157,7 +158,7 @@ class DoDLabelGeneratorPNG:
         try:
             date_obj = datetime.strptime(manufacture_date, "%d/%m/%Y")
             months = int(shelf_life_months) if pd.notna(shelf_life_months) else 24
-            expiry_date = date_obj + timedelta(days=months * 30)
+            expiry_date = date_obj + relativedelta(months=months)
             return expiry_date.strftime("%d %b %y").upper(), expiry_date
         except:
             return "N/A", None
