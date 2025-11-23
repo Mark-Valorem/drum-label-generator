@@ -2,11 +2,12 @@
 """
 DoD/NATO Label Generator - Streamlit Web Dashboard
 Generates military specification labels with web interface
-Version 2.2.0
+Version 2.3.0 - JSON SKU Database
 """
 
 import os
 import io
+import json
 import zipfile
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -205,21 +206,32 @@ class DoDLabelGenerator:
         except Exception as e:
             return None
 
-    def generate_gs1_datamatrix(self, nsn, batch_lot, expiry_date_obj, serial_number=None):
-        """Generate GS1 Data Matrix (ECC 200) 2D barcode"""
+    def generate_gs1_datamatrix(self, nsn, batch_lot, expiry_date_obj):
+        """Generate GS1 Data Matrix (ECC 200) 2D barcode
+
+        GS1 Format: AI 7001 (NSN) + AI 10 (Batch) + AI 17 (Expiry)
+        Note: Serial number (AI 21) removed per v2.3.0 requirements
+        """
         try:
-            GS = chr(29)
+            GS = chr(29)  # GS1 separator (ASCII 29)
+
+            # NSN: Extract 13 digits
             nsn_digits = ''.join(filter(str.isdigit, str(nsn)))
             if len(nsn_digits) != 13:
                 nsn_digits = nsn_digits.zfill(13)[-13:]
+
+            # Batch Lot: Max 20 characters
             batch_str = str(batch_lot)[:20] if batch_lot and pd.notna(batch_lot) else ""
+
+            # Expiry: YYMMDD format
             if expiry_date_obj:
                 expiry_str = expiry_date_obj.strftime("%y%m%d")
             else:
                 expiry_str = "990101"
+
+            # Build GS1 string: Only NSN, Batch, Expiry (no serial number)
             gs1_data = f"7001{nsn_digits}{GS}10{batch_str}{GS}17{expiry_str}"
-            if serial_number and pd.notna(serial_number) and str(serial_number).strip():
-                gs1_data += f"{GS}21{str(serial_number)[:20]}"
+
             encoded = dmtx_encode(gs1_data.encode('utf-8'))
             img = Image.frombytes('RGB', (encoded.width, encoded.height), encoded.pixels)
             scale = 6
@@ -318,12 +330,11 @@ class DoDLabelGenerator:
         unit_label_width = draw.textbbox((0, 0), "Unit: ", font=font_small)[2]
         draw.text((unit_x + unit_label_width, y_pos), unit_issue, fill='black', font=font_data)
 
-        # GS1 Data Matrix (far right)
+        # GS1 Data Matrix (far right) - AI 7001 (NSN) + AI 10 (Batch) + AI 17 (Expiry)
         datamatrix = self.generate_gs1_datamatrix(
             nato_stock,
             row.get('batch_lot_no', ''),
-            expiry_date_obj,
-            row.get('serial_number', None)
+            expiry_date_obj
         )
         if datamatrix:
             dm_size = mm_to_px(14, self.dpi)
@@ -555,25 +566,25 @@ def main():
         st.markdown("### 📖 Help")
         st.markdown("""
         **Quick Start:**
-        1. Upload a CSV or Excel file
-        2. Select label size per row
-        3. Preview labels
-        4. Download as PNG, PDF, or ZIP
+        1. Select product SKU from dropdown
+        2. Enter batch lot number and manufacturing date
+        3. Adjust re-test date if needed (defaults to DOM + shelf life)
+        4. Choose label size
+        5. Generate and download label
 
-        **Required Columns:**
-        - `product_description`
-        - `nato_stock_no`
-        - `niin`
-        - `batch_lot_no`
-        - `date_of_manufacture`
+        **Product Database:**
+        - Products loaded from `products.json`
+        - Each product has fixed NSN, specifications, shelf life
+        - Support for multiple pack sizes per product
 
-        **Field 12 (Safety Markings):**
-        - Column: `safety_movement_markings`
-        - Always displayed on label
+        **Date Calculations:**
+        - **Use by Date:** Automatically calculated (DOM + shelf life)
+        - **Re-Test Date:** Defaults to use by date, can be overridden
+        - **GS1 Barcode:** Encodes NSN + Batch + Expiry only (no serial number)
         """)
 
         st.markdown("---")
-        st.markdown("**v2.2.0** | Valorem Chemicals")
+        st.markdown("**v2.3.0** | Valorem Chemicals")
 
     # Apply dark mode CSS
     if dark_mode:
@@ -587,265 +598,214 @@ def main():
     st.title("🏷️ DoD/NATO Label Generator")
     st.markdown("Generate military specification labels with 4 barcode types per MIL-STD-129")
 
-    # File upload
-    st.markdown("### 📁 Upload Data File")
-    uploaded_file = st.file_uploader(
-        "Drag and drop CSV or Excel file here",
-        type=['csv', 'xlsx', 'xls'],
-        help="Upload a file containing product data. Each row will generate one label."
+    # Load products database
+    products_file = Path("products.json")
+    if not products_file.exists():
+        st.error("❌ `products.json` database file not found!")
+        st.info("Please create a `products.json` file in the project root directory with product SKU data.")
+        st.stop()
+
+    try:
+        with open(products_file, 'r') as f:
+            products_db = json.load(f)
+    except Exception as e:
+        st.error(f"❌ Error loading products.json: {e}")
+        st.stop()
+
+    if not products_db or len(products_db) == 0:
+        st.error("❌ products.json is empty!")
+        st.stop()
+
+    # Create product selector options
+    product_options = {}
+    for product in products_db:
+        display_name = f"{product['product_name']} ({product['unit_of_issue']})"
+        product_options[display_name] = product
+
+    # Product Selection Section
+    st.markdown("### 📦 Select Product")
+    selected_product_name = st.selectbox(
+        "Choose product SKU:",
+        options=list(product_options.keys()),
+        help="Select the product and pack size for label generation"
     )
 
-    if uploaded_file is not None:
-        # Load data
-        try:
-            if uploaded_file.name.endswith('.csv'):
-                df = pd.read_csv(uploaded_file)
-            else:
-                df = pd.read_excel(uploaded_file)
+    selected_product = product_options[selected_product_name]
 
-            st.success(f"✅ Loaded {len(df)} rows from {uploaded_file.name}")
+    # Display product information
+    with st.expander("ℹ️ Product Details", expanded=False):
+        col1, col2 = st.columns(2)
+        with col1:
+            st.write(f"**Product ID:** {selected_product['id']}")
+            st.write(f"**NSN:** {selected_product['nsn']}")
+            st.write(f"**NATO Code:** {selected_product['nato_code']}")
+            st.write(f"**JSD Reference:** {selected_product['jsd_reference']}")
+        with col2:
+            st.write(f"**Specification:** {selected_product['specification']}")
+            st.write(f"**Shelf Life:** {selected_product['shelf_life_months']} months")
+            st.write(f"**Batch Lot Managed:** {selected_product['batch_lot_managed']}")
+            st.write(f"**Hazmat Code:** {selected_product['hazardous_material_code']}")
 
-            # Add Label Size column if not present
-            if 'Label Size' not in df.columns:
-                df['Label Size'] = DEFAULT_LABEL_SIZE
+    st.markdown("---")
 
-            # Display editable data table
-            st.markdown("### 📊 Edit Data & Select Label Sizes")
-            st.markdown("*Edit values directly in the table. Select label size for each row.*")
+    # Manual Input Section
+    st.markdown("### ✏️ Label Information")
 
-            # Configure column for label size dropdown
-            column_config = {
-                'Label Size': st.column_config.SelectboxColumn(
-                    'Label Size',
-                    options=list(LABEL_SIZES.keys()),
-                    default=DEFAULT_LABEL_SIZE,
-                    required=True,
-                )
-            }
+    col1, col2 = st.columns(2)
 
-            # Editable dataframe
-            edited_df = st.data_editor(
-                df,
-                column_config=column_config,
-                num_rows="dynamic",
-                use_container_width=True,
-                height=400
-            )
-
-            st.markdown("---")
-
-            # Preview section
-            st.markdown("### 👁️ Label Preview")
-
-            col1, col2 = st.columns([1, 2])
-
-            with col1:
-                preview_row = st.selectbox(
-                    "Select row to preview:",
-                    options=range(len(edited_df)),
-                    format_func=lambda x: f"Row {x+1}: {edited_df.iloc[x].get('product_description', 'Unknown')}"
-                )
-
-            with col2:
-                if st.button("🔄 Refresh Preview", type="primary"):
-                    st.rerun()
-
-            # Generate preview
-            if preview_row is not None:
-                row_data = edited_df.iloc[preview_row].to_dict()
-                label_size = row_data.get('Label Size', DEFAULT_LABEL_SIZE)
-
-                generator = DoDLabelGenerator(label_size=label_size)
-                preview_img = generator.create_label_png(row_data)
-
-                # Display preview
-                st.image(preview_img, caption=f"Label Preview - {label_size}", use_container_width=True)
-
-            st.markdown("---")
-
-            # Download section
-            st.markdown("### 📥 Download Labels")
-
-            # Option to save to output folder
-            save_to_folder = st.checkbox("💾 Also save to output folder", value=True,
-                                         help="Save files to the project's output/ folder in addition to browser download")
-
-            # Create output directories if needed
-            output_png_dir = Path("output/png")
-            output_pdf_dir = Path("output/pdf")
-            if save_to_folder:
-                output_png_dir.mkdir(parents=True, exist_ok=True)
-                output_pdf_dir.mkdir(parents=True, exist_ok=True)
-
-            col1, col2, col3 = st.columns(3)
-
-            with col1:
-                if st.button("📷 Download All PNGs", type="secondary", use_container_width=True):
-                    with st.spinner("Generating PNG labels..."):
-                        png_files = []
-                        saved_paths = []
-                        for idx, row in edited_df.iterrows():
-                            row_data = row.to_dict()
-                            label_size = row_data.get('Label Size', DEFAULT_LABEL_SIZE)
-                            generator = DoDLabelGenerator(label_size=label_size)
-                            img = generator.create_label_png(row_data)
-
-                            # Save to buffer
-                            buffer = BytesIO()
-                            img.save(buffer, format='PNG', dpi=(DPI, DPI))
-                            buffer.seek(0)
-
-                            filename = f"label_{idx+1}_{row_data.get('product_description', 'unknown')}.png"
-                            filename = "".join(c if c.isalnum() or c in '-_.' else '_' for c in filename)
-                            png_files.append((filename, buffer.getvalue()))
-
-                            # Also save to output folder if enabled
-                            if save_to_folder:
-                                filepath = output_png_dir / filename
-                                img.save(filepath, format='PNG', dpi=(DPI, DPI))
-                                saved_paths.append(str(filepath))
-
-                        # Create ZIP
-                        zip_buffer = BytesIO()
-                        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
-                            for filename, data in png_files:
-                                zf.writestr(filename, data)
-                        zip_buffer.seek(0)
-
-                        st.download_button(
-                            label="💾 Save PNG Files (ZIP)",
-                            data=zip_buffer.getvalue(),
-                            file_name="dod_labels_png.zip",
-                            mime="application/zip"
-                        )
-
-                        if save_to_folder and saved_paths:
-                            st.success(f"✅ {len(saved_paths)} PNG files saved to: output/png/")
-
-            with col2:
-                if HAS_REPORTLAB:
-                    if st.button("📄 Download All PDFs", type="secondary", use_container_width=True):
-                        with st.spinner("Generating PDF labels..."):
-                            pdf_files = []
-                            saved_paths = []
-                            for idx, row in edited_df.iterrows():
-                                row_data = row.to_dict()
-                                label_size = row_data.get('Label Size', DEFAULT_LABEL_SIZE)
-                                generator = DoDLabelGenerator(label_size=label_size)
-                                img = generator.create_label_png(row_data)
-
-                                # Convert PNG to PDF
-                                pdf_buffer = BytesIO()
-                                img_width_pt = generator.total_width_mm * 72 / 25.4
-                                img_height_pt = generator.total_height_mm * 72 / 25.4
-
-                                pdf_canvas = canvas.Canvas(pdf_buffer, pagesize=(img_width_pt, img_height_pt))
-                                img_buffer = BytesIO()
-                                img.save(img_buffer, format='PNG')
-                                img_buffer.seek(0)
-                                pdf_canvas.drawImage(ImageReader(img_buffer), 0, 0, width=img_width_pt, height=img_height_pt)
-                                pdf_canvas.save()
-                                pdf_buffer.seek(0)
-
-                                filename = f"label_{idx+1}_{row_data.get('product_description', 'unknown')}.pdf"
-                                filename = "".join(ch if ch.isalnum() or ch in '-_.' else '_' for ch in filename)
-                                pdf_files.append((filename, pdf_buffer.getvalue()))
-
-                                # Also save to output folder if enabled
-                                if save_to_folder:
-                                    filepath = output_pdf_dir / filename
-                                    with open(filepath, 'wb') as f:
-                                        f.write(pdf_buffer.getvalue())
-                                    saved_paths.append(str(filepath))
-
-                            # Create ZIP
-                            zip_buffer = BytesIO()
-                            with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
-                                for filename, data in pdf_files:
-                                    zf.writestr(filename, data)
-                            zip_buffer.seek(0)
-
-                            st.download_button(
-                                label="💾 Save PDF Files (ZIP)",
-                                data=zip_buffer.getvalue(),
-                                file_name="dod_labels_pdf.zip",
-                                mime="application/zip"
-                            )
-
-                            if save_to_folder and saved_paths:
-                                st.success(f"✅ {len(saved_paths)} PDF files saved to: output/pdf/")
-                else:
-                    st.warning("PDF export requires ReportLab library")
-
-            with col3:
-                if st.button("📦 Download ZIP (All PNGs)", type="primary", use_container_width=True):
-                    with st.spinner("Creating ZIP archive..."):
-                        zip_buffer = BytesIO()
-                        saved_paths = []
-                        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
-                            for idx, row in edited_df.iterrows():
-                                row_data = row.to_dict()
-                                label_size = row_data.get('Label Size', DEFAULT_LABEL_SIZE)
-                                generator = DoDLabelGenerator(label_size=label_size)
-                                img = generator.create_label_png(row_data)
-
-                                # Save to buffer
-                                img_buffer = BytesIO()
-                                img.save(img_buffer, format='PNG', dpi=(DPI, DPI))
-                                img_buffer.seek(0)
-
-                                filename = f"label_{idx+1}_{row_data.get('product_description', 'unknown')}.png"
-                                filename = "".join(ch if ch.isalnum() or ch in '-_.' else '_' for ch in filename)
-                                zf.writestr(filename, img_buffer.getvalue())
-
-                                # Also save to output folder if enabled
-                                if save_to_folder:
-                                    filepath = output_png_dir / filename
-                                    img.save(filepath, format='PNG', dpi=(DPI, DPI))
-                                    saved_paths.append(str(filepath))
-
-                        zip_buffer.seek(0)
-
-                        st.download_button(
-                            label="💾 Save ZIP Archive",
-                            data=zip_buffer.getvalue(),
-                            file_name="dod_labels.zip",
-                            mime="application/zip"
-                        )
-
-                        if save_to_folder and saved_paths:
-                            st.success(f"✅ {len(saved_paths)} PNG files saved to: output/png/")
-
-        except Exception as e:
-            st.error(f"❌ Error loading file: {str(e)}")
-            st.exception(e)
-
-    else:
-        # Show sample data format
-        st.markdown("### 📋 Sample Data Format")
-        sample_df = pd.DataFrame({
-            'product_description': ['Fuchs OM-11', 'DCI 4A'],
-            'nato_stock_no': ['9150-66-035-7879', '6850-99-224-5252'],
-            'niin': ['660357879', '992245252'],
-            'batch_lot_no': ['FM251115A', 'DC251115B'],
-            'date_of_manufacture': ['15/11/2025', '15/11/2025'],
-            'shelf_life_months': [36, 24],
-            'safety_movement_markings': ['-', 'UN1307, Flammable Liquid, Class 3, PG III'],
-            'Label Size': [DEFAULT_LABEL_SIZE, DEFAULT_LABEL_SIZE],
-        })
-        st.dataframe(sample_df, use_container_width=True)
-
-        # Download sample CSV
-        csv_buffer = BytesIO()
-        sample_df.to_csv(csv_buffer, index=False)
-        csv_buffer.seek(0)
-
-        st.download_button(
-            label="📥 Download Sample CSV",
-            data=csv_buffer.getvalue(),
-            file_name="sample_data_dod.csv",
-            mime="text/csv"
+    with col1:
+        st.markdown("#### Fixed Inputs")
+        batch_lot_no = st.text_input(
+            "Batch Lot Number *",
+            value="",
+            help="Enter the batch/lot number for this production run (Field 5)"
         )
+
+        date_of_manufacture = st.date_input(
+            "Date of Manufacture *",
+            value=datetime.now(),
+            help="Select the manufacturing date (Field 8)"
+        )
+
+        test_report_no = st.text_input(
+            "Test Report Number",
+            value="-",
+            help="Enter test report number or leave as '-' if not applicable (Field 14)"
+        )
+
+    with col2:
+        st.markdown("#### Calculated Defaults")
+
+        # Calculate default Re-Test Date
+        if date_of_manufacture:
+            default_retest_date = date_of_manufacture + timedelta(days=selected_product['shelf_life_months'] * 30)
+        else:
+            default_retest_date = datetime.now() + timedelta(days=selected_product['shelf_life_months'] * 30)
+
+        retest_date = st.date_input(
+            "Re-Test Date",
+            value=default_retest_date,
+            help=f"Default: DOM + {selected_product['shelf_life_months']} months. You can override this date. (Field 13)"
+        )
+
+        # Calculate Use by Date (display only)
+        if date_of_manufacture:
+            use_by_date = date_of_manufacture + timedelta(days=selected_product['shelf_life_months'] * 30)
+            st.info(f"**Use by Date (Auto):** {use_by_date.strftime('%d %b %y').upper()}\n\n*Calculated: DOM + {selected_product['shelf_life_months']} months (Field 19)*")
+        else:
+            st.info("**Use by Date:** _Enter manufacturing date first_")
+
+    # Label Size Selection
+    st.markdown("---")
+    st.markdown("### 📏 Label Size")
+    label_size = st.selectbox(
+        "Select label size:",
+        options=list(LABEL_SIZES.keys()),
+        index=list(LABEL_SIZES.keys()).index(DEFAULT_LABEL_SIZE),
+        help="Choose the physical label size for printing"
+    )
+
+    # Validation
+    can_generate = bool(batch_lot_no and date_of_manufacture)
+
+    if not can_generate:
+        st.warning("⚠️ Please fill in all required fields (marked with *) to generate label")
+
+    # Generate Label Button
+    st.markdown("---")
+    if st.button("🏷️ Generate Label", type="primary", disabled=not can_generate, use_container_width=True):
+        # Combine product data with manual inputs
+        row_data = {
+            'product_description': selected_product['product_name'],
+            'nato_stock_no': selected_product['nsn'],
+            'nato_code': selected_product['nato_code'],
+            'jsd_reference': selected_product['jsd_reference'],
+            'specification': selected_product['specification'],
+            'batch_lot_no': batch_lot_no,
+            'batch_lot_managed': selected_product['batch_lot_managed'],
+            'date_of_manufacture': date_of_manufacture.strftime('%d/%m/%Y'),
+            'contractor_details': selected_product['contractor_details'],
+            'capacity_net_weight': selected_product['capacity_weight'],
+            'safety_movement_markings': selected_product['safety_markings'],
+            'shelf_life_months': selected_product['shelf_life_months'],
+            'test_report_no': test_report_no,
+            'unit_of_issue': selected_product['unit_of_issue'],
+            'hazardous_material_code': selected_product['hazardous_material_code'],
+            'retest_date': retest_date.strftime('%d/%m/%Y') if retest_date else "-",
+        }
+
+        # Generate label
+        with st.spinner("Generating label..."):
+            generator = DoDLabelGenerator(label_size=label_size)
+            label_img = generator.create_label_png(row_data)
+
+            # Store in session state for download
+            st.session_state['current_label'] = label_img
+            st.session_state['current_label_data'] = row_data
+            st.session_state['current_label_size'] = label_size
+
+        st.success("✅ Label generated successfully!")
+
+    # Preview Section
+    if 'current_label' in st.session_state:
+        st.markdown("---")
+        st.markdown("### 👁️ Label Preview")
+        st.image(st.session_state['current_label'], caption=f"Label Preview - {st.session_state['current_label_size']}", use_container_width=True)
+
+        # Download Section
+        st.markdown("---")
+        st.markdown("### 📥 Download Label")
+
+        # Option to save to output folder
+        save_to_folder = st.checkbox("💾 Also save to output folder", value=True,
+                                     help="Save file to the project's output/ folder in addition to browser download")
+
+        # Create output directories if needed
+        output_png_dir = Path("output/png")
+        if save_to_folder:
+            output_png_dir.mkdir(parents=True, exist_ok=True)
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            if st.button("📷 Download PNG", type="secondary", use_container_width=True):
+                img = st.session_state['current_label']
+                row_data = st.session_state['current_label_data']
+
+                # Save to buffer
+                buffer = BytesIO()
+                img.save(buffer, format='PNG', dpi=(DPI, DPI))
+                buffer.seek(0)
+
+                # Generate filename
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                filename = f"dod_label_{row_data['product_description']}_{batch_lot_no}_{st.session_state['current_label_size'].replace(' ', '')}_{timestamp}.png"
+                filename = "".join(c if c.isalnum() or c in '-_.' else '_' for c in filename)
+
+                # Save to folder if enabled
+                if save_to_folder:
+                    filepath = output_png_dir / filename
+                    img.save(filepath, format='PNG', dpi=(DPI, DPI))
+                    st.success(f"💾 Saved to: {filepath}")
+
+                # Provide download button
+                st.download_button(
+                    label="⬇️ Download PNG File",
+                    data=buffer.getvalue(),
+                    file_name=filename,
+                    mime="image/png"
+                )
+
+        with col2:
+            if HAS_REPORTLAB:
+                if st.button("📄 Download PDF", type="secondary", use_container_width=True):
+                    # Note: PDF generation would require refactoring the PDF generator
+                    # For now, show info message
+                    st.info("PDF generation with JSON workflow coming in v2.3.1")
+            else:
+                st.info("PDF generation unavailable (ReportLab not installed)")
+    else:
+        st.info("👆 Select a product and fill in the label information above to generate a label.")
 
 
 if __name__ == "__main__":

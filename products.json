@@ -1,0 +1,47 @@
+[
+  {
+    "id": "OM11_20L",
+    "product_name": "Fuchs OM-11",
+    "nsn": "9150-66-035-7879",
+    "nato_code": "H-576",
+    "jsd_reference": "OM-33",
+    "specification": "DEF STAN 91-39 Issue 4",
+    "unit_of_issue": "20 LI",
+    "capacity_weight": "20 LI",
+    "shelf_life_months": 36,
+    "batch_lot_managed": "Y",
+    "hazardous_material_code": "-",
+    "contractor_details": "Valorem Chemicals Pty Ltd|123 Industrial Drive|Sydney NSW 2000|Australia",
+    "safety_markings": "-"
+  },
+  {
+    "id": "OM11_205L",
+    "product_name": "Fuchs OM-11",
+    "nsn": "9150-66-035-7879",
+    "nato_code": "H-576",
+    "jsd_reference": "OM-33",
+    "specification": "DEF STAN 91-39 Issue 4",
+    "unit_of_issue": "205 LI",
+    "capacity_weight": "205 LI",
+    "shelf_life_months": 36,
+    "batch_lot_managed": "Y",
+    "hazardous_material_code": "-",
+    "contractor_details": "Valorem Chemicals Pty Ltd|123 Industrial Drive|Sydney NSW 2000|Australia",
+    "safety_markings": "-"
+  },
+  {
+    "id": "DCI4A_55GAL",
+    "product_name": "DCI 4A",
+    "nsn": "6850-99-224-5252",
+    "nato_code": "-",
+    "jsd_reference": "AL-61",
+    "specification": "MIL-PRF-25017",
+    "unit_of_issue": "55 US GAL",
+    "capacity_weight": "55 US GAL",
+    "shelf_life_months": 24,
+    "batch_lot_managed": "Y",
+    "hazardous_material_code": "UN1307, 3, III",
+    "contractor_details": "Valorem Chemicals Pty Ltd|123 Industrial Drive|Sydney NSW 2000|Australia",
+    "safety_markings": "UN1307, Flammable Liquid, Class 3, PG III"
+  }
+]

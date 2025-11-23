@@ -997,6 +997,213 @@ This PIL rendering system is **production-ready** and **mission-critical**. Any 
 
 ---
 
+## Data Architecture (v2.3.0+)
+
+### JSON SKU Database Overview
+
+**Version:** Introduced in v2.3.0
+**Purpose:** Separate Fixed Product Data from Variable Label Data
+**File:** `products.json`
+
+### Data Separation Strategy
+
+**Fixed Data (products.json):**
+- Product specifications that don't change per label
+- Stored centrally, managed by admin
+- Examples: NSN, NATO Code, Specification, Shelf Life
+
+**Variable Data (User Input):**
+- Information that changes for each label
+- Entered by user via Streamlit UI
+- Examples: Batch Lot Number, Date of Manufacture, Test Report Number
+
+### products.json Structure
+
+```json
+[
+  {
+    "id": "PRODUCT_SIZE",
+    "product_name": "Product Name",
+    "nsn": "nnnn-nn-nnn-nnnn",
+    "nato_code": "X-XXX or -",
+    "jsd_reference": "XX-XX",
+    "specification": "Spec Number",
+    "unit_of_issue": "SIZE",
+    "capacity_weight": "SIZE",
+    "shelf_life_months": 24,
+    "batch_lot_managed": "Y",
+    "hazardous_material_code": "UN#### or -",
+    "contractor_details": "Company|Address|City|Country",
+    "safety_markings": "Markings or -"
+  }
+]
+```
+
+### Unique ID Rule (CRITICAL)
+
+**Rule:** Each product/pack size combination MUST have a unique `id` field.
+
+**Rationale:** Products can have the same name but different pack sizes, so `product_name` alone is not unique.
+
+**Examples:**
+- `OM11_20L` - Fuchs OM-11 in 20 litre pack
+- `OM11_205L` - Fuchs OM-11 in 205 litre drum
+- `OM11_1000L` - Fuchs OM-11 in 1000 litre IBC
+- `DCI4A_55GAL` - DCI 4A in 55 US gallon drum
+
+**Naming Convention:**
+- Format: `PRODUCTCODE_SIZE`
+- Use uppercase letters and numbers only
+- Use underscores for separators
+- Keep IDs short but descriptive
+
+### Field Mappings
+
+| JSON Field | Label Field | Type | Example |
+|------------|-------------|------|---------|
+| `id` | (Internal) | Fixed | "OM11_20L" |
+| `product_name` | Field 4 | Fixed | "Fuchs OM-11" |
+| `nsn` | Field 11 | Fixed | "9150-66-035-7879" |
+| `nato_code` | Field 1 | Fixed | "H-576" |
+| `jsd_reference` | Field 2 | Fixed | "OM-33" |
+| `specification` | Field 3 | Fixed | "DEF STAN 91-39 Issue 4" |
+| `unit_of_issue` | Field 17 | Fixed | "20 LI" |
+| `capacity_weight` | Field 10 | Fixed | "20 LI" |
+| `shelf_life_months` | (Calculation) | Fixed | 36 |
+| `batch_lot_managed` | Field 6 | Fixed | "Y" |
+| `hazardous_material_code` | Field 18 | Fixed | "-" |
+| `contractor_details` | Field 9 | Fixed | "Valorem..." |
+| `safety_markings` | Field 12 | Fixed | "-" |
+| (User Input) | Field 5 | Variable | "FM251122A" |
+| (User Input) | Field 8 | Variable | "23/11/2025" |
+| (User Input) | Field 14 | Variable | "-" |
+| (Calculated) | Field 13 | Calculated | DOM + shelf_life |
+| (Calculated) | Field 19 | Calculated | DOM + shelf_life |
+| (Calculated) | Field 15 | Calculated | Last 9 digits of NSN |
+
+### Date Calculation Logic (v2.3.0)
+
+**Use by Date (Field 19):**
+```python
+use_by_date = date_of_manufacture + timedelta(days=shelf_life_months * 30)
+# Format: DD MMM YY (e.g., "07 NOV 28")
+# Always calculated, not editable
+```
+
+**Re-Test Date (Field 13):**
+```python
+default_retest_date = date_of_manufacture + timedelta(days=shelf_life_months * 30)
+# User can override via date picker
+# Format: DD/MM/YYYY
+```
+
+**NIIN Extraction (Field 15):**
+```python
+nsn = "9150-66-035-7879"
+niin = nsn.replace('-', '')[-9:]  # "660357879"
+```
+
+### GS1 Data Matrix Changes (v2.3.0)
+
+**CRITICAL CHANGE:** Serial number (AI 21) removed from GS1 encoding.
+
+**Old Format (v2.2.x):**
+```
+AI 7001 (NSN) + AI 10 (Batch) + AI 17 (Expiry) + AI 21 (Serial)
+```
+
+**New Format (v2.3.0):**
+```
+AI 7001 (NSN) + AI 10 (Batch) + AI 17 (Expiry)
+```
+
+**Encoding:**
+```python
+gs = chr(29)  # GS1 separator (ASCII 29)
+nsn_digits = '9150660357879'  # 13 digits, no hyphens
+batch = 'FM251122A'
+expiry_yymmdd = '281107'  # YYMMDD format
+
+gs1_data = f"7001{nsn_digits}{GS}10{batch}{GS}17{expiry_yymmdd}"
+# Result: 70019150660357879[GS]10FM251122A[GS]17281107
+```
+
+**Compliance Note:** Submit new format to GS1 Australia for re-testing before production use.
+
+### User Workflow (v2.3.0)
+
+1. **Select Product:** Dropdown shows `product_name (unit_of_issue)`
+2. **Enter Variable Data:**
+   - Batch Lot Number (required)
+   - Date of Manufacture (required, date picker)
+   - Test Report Number (optional, defaults to "-")
+3. **Review Calculated Defaults:**
+   - Re-Test Date (date picker, defaults to DOM + shelf life, user can override)
+   - Use by Date (display only, auto-calculated)
+4. **Choose Label Size:** Select from 8 available sizes
+5. **Generate Label:** Click button to combine product + user data
+6. **Download:** PNG download (PDF coming in v2.3.1)
+
+### Adding New Products
+
+**Step 1:** Determine unique ID
+- Check existing products.json for conflicts
+- Follow naming convention: `PRODUCTCODE_SIZE`
+
+**Step 2:** Create JSON entry
+```json
+{
+  "id": "NEW_PRODUCT_SIZE",
+  "product_name": "Product Name",
+  "nsn": "nnnn-nn-nnn-nnnn",
+  "nato_code": "X-XXX",
+  "jsd_reference": "XX-XX",
+  "specification": "Spec Number",
+  "unit_of_issue": "SIZE",
+  "capacity_weight": "SIZE",
+  "shelf_life_months": 24,
+  "batch_lot_managed": "Y",
+  "hazardous_material_code": "-",
+  "contractor_details": "Company|Address|City|Country",
+  "safety_markings": "-"
+}
+```
+
+**Step 3:** Validate JSON
+```bash
+python -c "import json; json.load(open('products.json'))"
+```
+
+**Step 4:** Restart Streamlit app
+```bash
+streamlit run dod_label_app.py
+```
+
+### Migration from CSV Workflow
+
+**Old Workflow (v2.2.x):**
+- Upload CSV with all fields (fixed + variable)
+- Edit in table
+- Generate multiple labels
+
+**New Workflow (v2.3.0):**
+- Product data in JSON (one-time setup)
+- User enters variable data per label
+- Generate single label at a time
+
+**Migration Steps:**
+1. Extract unique products from CSV data
+2. Create JSON entry for each product/size
+3. Use new UI to generate labels individually
+
+**Benefits:**
+- Eliminates data entry errors (NSN, specs pre-populated)
+- Faster label generation (less typing)
+- Centralized product database (easier to maintain)
+- Support for multiple pack sizes per product
+
+---
+
 **For Technical Stack Details, see:** `.claude_docs/TECH_STACK.md`
 **For Visual Specifications, see:** `.claude_docs/PROJECT_BRIEF.md`
 **For Architecture Decisions, see:** `.claude_docs/DECISIONS.md`

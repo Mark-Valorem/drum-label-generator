@@ -1,7 +1,7 @@
 # Project Progress & Version History
 **Project:** DoD/NATO Military Label Generator
-**Current Version:** 2.2.4
-**Last Updated:** 2025-11-22
+**Current Version:** 2.3.0
+**Last Updated:** 2025-11-23
 
 ---
 
@@ -10,8 +10,217 @@
 ```
 v1.0.0 (2024-11-13) → v2.0.0 (2025-11-15) → v2.1.0 (2025-11-21) →
 v2.1.1 (2025-11-21) → v2.2.0 (2025-11-21) → v2.2.1 (2025-11-22) →
-v2.2.2 (2025-11-22) → v2.2.3 (2025-11-22) → v2.2.4 (2025-11-22)
+v2.2.2 (2025-11-22) → v2.2.3 (2025-11-22) → v2.2.4 (2025-11-22) → v2.3.0 (2025-11-23)
 ```
+
+---
+
+## v2.3.0 (2025-11-23) - JSON SKU Database & App Refactor
+
+### Type: Major Feature (Data Architecture)
+
+### Overview
+Complete redesign of data input workflow. Replaced CSV upload with JSON product database + manual input form. Separates fixed product data (stored in JSON) from variable label data (user input). Implements smart date defaults with auto-calculation for Use by Date and configurable Re-Test Date.
+
+### Major Changes
+
+#### 1. JSON Product Database
+**File:** `products.json` (NEW)
+
+**Purpose:** Central repository for fixed product specifications
+
+**Structure:**
+- Unique ID per product/pack size combination (e.g., `OM11_20L`, `OM11_205L`)
+- Fixed fields: NSN, NATO Code, Specification, Shelf Life, Contractor Details
+- Supports multiple pack sizes for same product
+
+**Sample Products:**
+- `OM11_20L`: Fuchs OM-11 (20 LI pack)
+- `OM11_205L`: Fuchs OM-11 (205 LI pack)
+- `DCI4A_55GAL`: DCI 4A (55 US GAL pack)
+
+#### 2. Streamlit App Refactor
+**File:** `dod_label_app.py` (MAJOR REFACTOR)
+
+**Removed:**
+- CSV/Excel upload workflow
+- Batch processing (multi-row labels)
+- `st.data_editor()` table interface
+- Multi-label download (ZIP, batch PDF/PNG)
+
+**Added:**
+- Product selector dropdown (displays "Product Name (Pack Size)")
+- Manual input form with 3 sections:
+  - **Fixed Inputs:** Batch Lot No, DOM (date picker), Test Report No
+  - **Calculated Defaults:** Re-Test Date (date picker with smart default)
+  - **Display Only:** Use by Date (auto-calculated, not editable)
+- Single label generation workflow
+- Session state for preview/download
+- Product details expander (shows NSN, specs, shelf life)
+
+#### 3. Smart Date Defaults
+**Use by Date (Field 19):**
+- Always auto-calculated: `DOM + shelf_life_months`
+- Format: DD MMM YY (e.g., "07 NOV 28")
+- Not editable (display only)
+
+**Re-Test Date (Field 13):**
+- Defaults to: `DOM + shelf_life_months`
+- User can override via date picker
+- Format: DD/MM/YYYY
+
+**NIIN (Field 15):**
+- Auto-extracted: Last 9 digits of NSN
+- Example: NSN "9150-66-035-7879" → NIIN "660357879"
+
+#### 4. GS1 Data Matrix Simplification
+**BREAKING CHANGE:** Serial number (AI 21) removed
+
+**Old Format (v2.2.x):**
+```
+AI 7001 (NSN) + AI 10 (Batch) + AI 17 (Expiry) + AI 21 (Serial)
+```
+
+**New Format (v2.3.0):**
+```
+AI 7001 (NSN) + AI 10 (Batch) + AI 17 (Expiry)
+```
+
+**Example Encoding:**
+```
+70019150660357879[GS]10FM251122A[GS]17281107
+```
+
+**Rationale:** Simplified tracking, removed unused serial number field
+
+### Files Created
+1. **`products.json`** - Product SKU database (3 sample products)
+2. **`test_json_workflow.py`** - Automated test script for JSON workflow
+3. **`IMPLEMENTATION_SUMMARY_V2.3.md`** - Comprehensive implementation guide
+
+### Files Modified
+1. **`dod_label_app.py`** - Complete UI refactor (v2.2.0 → v2.3.0)
+   - Lines 1-812 (entire file restructured)
+   - New imports: `json`
+   - Updated version string: "v2.3.0 - JSON SKU Database"
+   - Updated help documentation in sidebar
+   - New UI sections: Product selector, manual inputs, date calculations
+2. **`.claude_docs/MEMORY.md`** - Added "Data Architecture (v2.3.0+)" section
+   - JSON database overview
+   - Unique ID rule documentation
+   - Field mappings table
+   - Date calculation logic
+   - GS1 Data Matrix changes
+   - Migration guide from CSV workflow
+3. **`.claude_docs/PROGRESS.md`** - This entry
+
+### Breaking Changes
+
+**For End Users:**
+- **CSV Upload Removed:** Can no longer upload CSV/Excel files
+- **Batch Processing Removed:** Generate labels one at a time
+- **Product Data Fixed:** Specs stored in JSON (not entered per label)
+
+**For GS1 Compliance:**
+- **Serial Number Removed:** AI 21 no longer encoded in Data Matrix
+- **Action Required:** Submit new format to GS1 Australia for re-testing
+
+### Migration Path
+
+**From v2.2.x to v2.3.0:**
+1. Extract unique products from existing CSV data
+2. Create `products.json` entry for each product/pack size
+3. Restart Streamlit app: `streamlit run dod_label_app.py`
+4. Use new UI to generate labels individually
+
+**CSV Still Works:**
+- CLI tools (`dod_label_generator_png.py`, `dod_label_generator.py`) unchanged
+- Can still generate labels from CSV via command line
+- Streamlit app now uses JSON database only
+
+### Testing
+
+**Automated Test:**
+```bash
+python test_json_workflow.py
+```
+
+**Test Results:**
+```
+✅ JSON database loads successfully (3 products)
+✅ Label generation works with JSON data
+✅ Date calculations accurate (DOM + 36 months = Use by Date)
+✅ NIIN extraction correct (last 9 digits of NSN)
+✅ GS1 Data Matrix: NSN + Batch + Expiry only (no serial)
+✅ PNG output: 2636 × 3836 px at 600 DPI
+```
+
+**Manual Testing:**
+- [x] Product selector displays correctly
+- [x] Product details expander shows all fields
+- [x] Date calculations work (Use by Date, Re-Test Date)
+- [x] Re-Test Date override works
+- [x] Label generation successful
+- [x] PNG download works
+- [x] File saves to output/png/ folder
+
+### Benefits
+
+**Data Quality:**
+- Eliminates NSN/specification entry errors
+- Consistent product data across all labels
+- Single source of truth for product specs
+
+**User Experience:**
+- Faster label generation (less typing)
+- Smart defaults reduce manual calculations
+- Clear separation of fixed vs variable data
+
+**Maintainability:**
+- Centralized product database
+- Easy to add new products/pack sizes
+- Support for multiple pack sizes per product
+
+### Known Limitations
+
+**v2.3.0:**
+- Single label generation only (no batch mode)
+- PNG download only (PDF download coming in v2.3.1)
+- No CSV export of products.json
+
+### Future Enhancements (v2.3.1+)
+
+**Planned:**
+1. PDF download for JSON workflow
+2. Batch mode (multiple batch numbers for same product)
+3. Label generation history
+4. Product database export/import
+5. Product image support
+
+### Git Branch
+`feat-sku-json-database`
+
+### Compliance Impact
+- ✅ MIL-STD-129: All 21 fields still supported
+- ✅ ISO barcode standards: Unchanged (Code 128, Code 39, Data Matrix)
+- ⚠️ GS1 Data Matrix: Format changed (submit for re-testing)
+- ✅ Date formats: Unchanged (DD MMM YY)
+
+### Documentation Updates
+**MEMORY.md:**
+- Added "Data Architecture (v2.3.0+)" section
+- Documented Unique ID Rule
+- Field mappings table (Fixed vs Variable vs Calculated)
+- Date calculation logic
+- GS1 Data Matrix changes
+- Migration guide
+
+**IMPLEMENTATION_SUMMARY_V2.3.md:**
+- Complete implementation guide
+- User workflow changes
+- Database management instructions
+- Testing checklist
+- Command reference
 
 ---
 
