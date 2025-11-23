@@ -752,10 +752,36 @@ draw.text((text_x, text_y), nato_code_val, fill='black', font=font_data)
 - ❌ Drawing box for dash "-" values (looks like graphical glitch)
 - ❌ Using padding < 10px (causes border to cut through text descenders)
 
-### Field 18 (Hazardous Material Code)
-**Always Display:** This field MUST be shown in the information table
-- Default value: "-" if empty/missing
-- Added in v2.2.3 as new table row
+### Field 18 (Hazardous Material Code) - HAZARD BOX IN HEADER
+**IMPORTANT CHANGE (v2.4.1):** Field 18 is NO LONGER in the data table. It now renders as a visual indicator in the label header.
+
+**Visual Rendering:**
+- **Location:** Top-right header area, positioned between "Unit of Issue" and the GS1 Data Matrix barcode
+- **Style:** Black filled square with white text
+- **Components:**
+  1. "HAZARD" label text (tiny/small font, uppercase) positioned ABOVE the box
+  2. Black filled square below the label
+  3. Hazard class number rendered in WHITE, centered inside the black box
+- **Conditional Display:** Only drawn when `hazardous_material_code` is not "-" or empty
+- **Box Dimensions:**
+  - PNG generator (`dod_label_generator_png.py`): 8mm square
+  - App generator (`dod_label_app.py`): 5mm square (compact layout)
+
+**Data Format Rule:**
+- `hazardous_material_code` in `products.json` MUST contain ONLY the single-digit hazard class number
+- ✅ CORRECT: `"hazardous_material_code": "3"` (Class 3 - Flammable Liquid)
+- ❌ INCORRECT: `"hazardous_material_code": "UN1307, 3, III"` (full UN string)
+- Full UN/safety information belongs in `safety_markings` field (Field 12)
+
+**Code Location:**
+- `dod_label_generator_png.py`: Lines 342-373 (header section)
+- `dod_label_app.py`: Lines 335-366 (header section)
+- Variable defined early in header: `hazmat_code = self.safe_str(row.get('hazardous_material_code', ''), '-')`
+
+**Example Products:**
+- DCI 4A: Class 3 (Flammable Liquid) - displays white "3" in black box
+- Prist FSII: Class 3 (Flammable Liquid) - displays white "3" in black box
+- Fuchs OM-11: No hazard class ("-") - box not drawn
 
 ### Field 12 (Safety & Movement Markings)
 **Label Text (App only):**

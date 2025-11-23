@@ -43,5 +43,20 @@
     "hazardous_material_code": "3",
     "contractor_details": "Valorem Chemicals Pty Ltd|123 Industrial Drive|Sydney NSW 2000|Australia",
     "safety_markings": "UN1307, Flammable Liquid, Class 3, PG III"
+  },
+  {
+    "id": "Prist FSII_19KG",
+    "product_name": "Prist FSII",
+    "nsn": "6850-99-225-1929",
+    "nato_code": "S-1745",
+    "jsd_reference": "AL-41",
+    "specification": "MIL-DTL-85470B",
+    "unit_of_issue": "PA",
+    "capacity_weight": "19 KG",
+    "shelf_life_months": 18,
+    "batch_lot_managed": "Y",
+    "hazardous_material_code": "3",
+    "contractor_details": "Valorem Chemicals Pty Ltd|123 Industrial Drive|Sydney NSW 2000|Australia",
+    "safety_markings": "UN 1993, Class 3, Packing Group III"
   }
 ]
