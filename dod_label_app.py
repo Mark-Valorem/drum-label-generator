@@ -458,13 +458,22 @@ class DoDLabelGenerator:
         test_report = self.safe_str(row.get('test_report_no', ''), '-')
         # hazmat_code already defined earlier for header rendering (line 313)
 
+        # Re-Test Date: Use manual override if provided, otherwise use calculated use_by_date
+        manual_retest = row.get('retest_date')
+        if manual_retest and manual_retest not in [None, '-', '']:
+            # Manual override: format the provided date
+            retest_display = self.format_date_display(str(manual_retest))
+        else:
+            # Auto-calculate: use the use_by_date (Field 19)
+            retest_display = use_by_date
+
         table_data = [
             ('NATO Code / JSD:', f"{nato_code}|{jsd_ref}"),  # Req 7: Use internal separator for inline rendering
             ('Specification:', spec),
             ('Batch Lot No.:', batch_lot if batch_lot else '-'),
             ('Date of Manufacture:', dom_formatted),
             ('Capacity/Net Weight:', capacity),
-            ('Re-Test Date:', use_by_date),
+            ('Re-Test Date:', retest_display),
             ('Test Report No.:', test_report),
             # Hazardous Material Code removed - now shown in header hazard box
         ]
@@ -1005,11 +1014,24 @@ def show_label_generator(products_db):
         else:
             default_retest_date = datetime.now() + relativedelta(months=selected_product['shelf_life_months'])
 
+        # Override checkbox for Re-Test Date
+        override_retest = st.checkbox(
+            "Override Default Re-Test Date",
+            value=False,
+            help="Check this to manually specify a Re-Test Date instead of using the calculated default"
+        )
+
+        # Re-Test Date input (conditional based on override)
         retest_date = st.date_input(
             "Re-Test Date",
             value=default_retest_date,
-            help=f"Default: DOM + {selected_product['shelf_life_months']} months. You can override this date. (Field 13)"
+            disabled=not override_retest,
+            help=f"Default: DOM + {selected_product['shelf_life_months']} months. Enable override to manually specify. (Field 13)"
         )
+
+        # Warning if override is active but test report is missing
+        if override_retest and not test_report_no:
+            st.warning("⚠️ Compliance Warning: You are overriding the Re-Test date without a Test Report Number.")
 
         # Calculate Use by Date (display only)
         if date_of_manufacture:
@@ -1054,7 +1076,7 @@ def show_label_generator(products_db):
             'test_report_no': test_report_no,
             'unit_of_issue': selected_product['unit_of_issue'],
             'hazardous_material_code': selected_product['hazardous_material_code'],
-            'retest_date': retest_date.strftime('%d/%m/%Y') if retest_date else "-",
+            'retest_date': retest_date.strftime('%d/%m/%Y') if override_retest and retest_date else None,
         }
 
         # Generate label

@@ -465,13 +465,22 @@ class DoDLabelGeneratorPNG:
         test_report = self.safe_str(row.get('test_report_no', ''), '-')
         hazmat_code = self.safe_str(row.get('hazardous_material_code', ''), '-')
 
+        # Re-Test Date: Use manual override if provided, otherwise use calculated use_by_date
+        manual_retest = row.get('retest_date')
+        if manual_retest and manual_retest not in [None, '-', '']:
+            # Manual override: format the provided date
+            retest_display = self.format_date_display(str(manual_retest))
+        else:
+            # Auto-calculate: use the use_by_date (Field 19)
+            retest_display = use_by_date
+
         table_data = [
             ('NATO Code / JSD:', f"{nato_code}|{jsd_ref}"),  # Req 7: Use internal separator for inline rendering
             ('Specification:', spec),
             ('Batch Lot No.', batch_lot),
             ('Date of Manufacture', dom_formatted),
             ('Capacity or Net Weight', capacity),
-            ('Re-Test Date NATO/JSD', use_by_date),
+            ('Re-Test Date NATO/JSD', retest_display),
             ('Test Report No.', test_report),
             # Hazardous Material Code removed - now shown in header hazard box
         ]
