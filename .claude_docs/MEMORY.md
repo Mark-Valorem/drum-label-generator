@@ -1121,15 +1121,48 @@ use_by_date = date_of_manufacture + relativedelta(months=shelf_life_months)
 # Example: Nov 12 + 18 months = May 12 (exact day preserved)
 ```
 
-**Re-Test Date (Field 13):**
+**Re-Test Date (Field 13) - Manual Override Logic (v2.5.0+):**
+
+**IMPORTANT CHANGE (v2.5.0):** Re-Test Date now supports manual override with linked Test Report Number field.
+
 ```python
 from dateutil.relativedelta import relativedelta
 
+# Default calculation
 default_retest_date = date_of_manufacture + relativedelta(months=shelf_life_months)
-# User can override via date picker
-# Format: DD/MM/YYYY
-# Example: Nov 15 + 36 months = Nov 15 (exact day preserved)
+
+# Override logic in generator
+manual_retest = row.get('retest_date')
+if manual_retest and manual_retest not in [None, '-', '']:
+    retest_display = format_date_display(manual_retest)  # Manual override
+else:
+    retest_display = use_by_date  # Auto-calculate (Field 19)
 ```
+
+**UI Logic (v2.5.0):**
+- **Override Checkbox:** "Override Default Re-Test Date" (default: unchecked)
+- **Re-Test Date Picker:**
+  - Unchecked: `disabled=True` (shows calculated value, not editable)
+  - Checked: `disabled=False` (allows manual date selection)
+- **Test Report Number:**
+  - Unchecked: `disabled=True` (grayed out)
+  - Checked: `disabled=False` (active for input)
+- **Visual Grouping:** Both fields in col2 (right column) for logical coupling
+
+**Safety Rule - Stale Data Prevention:**
+```python
+# Data passing logic
+'test_report_no': test_report_no if override_retest else "-",
+'retest_date': retest_date.strftime('%d/%m/%Y') if override_retest and retest_date else None
+```
+- **IF Override is False:** Test Report field forced to `"-"` (ignores any hidden user input)
+- **IF Override is True:** Uses actual user-provided values
+- **Purpose:** Prevents stale data from disabled fields printing on labels
+
+**Compliance Warning:**
+- Shows when: `override_retest == True` AND `test_report_no in ["-", "", None]`
+- Message: "⚠️ Compliance Warning: You are overriding the Re-Test date without a Test Report Number."
+- Purpose: Reminds users to document manual date changes
 
 **Why relativedelta?**
 - **OLD (v2.3.0):** `timedelta(days=months * 30)` - assumes all months are 30 days

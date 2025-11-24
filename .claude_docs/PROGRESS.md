@@ -1,7 +1,7 @@
 # Project Progress & Version History
 **Project:** DoD/NATO Military Label Generator
-**Current Version:** 2.4.0
-**Last Updated:** 2025-11-23
+**Current Version:** 2.5.0
+**Last Updated:** 2025-11-24
 
 ---
 
@@ -11,8 +11,156 @@
 v1.0.0 (2024-11-13) → v2.0.0 (2025-11-15) → v2.1.0 (2025-11-21) →
 v2.1.1 (2025-11-21) → v2.2.0 (2025-11-21) → v2.2.1 (2025-11-22) →
 v2.2.2 (2025-11-22) → v2.2.3 (2025-11-22) → v2.2.4 (2025-11-22) →
-v2.3.0 (2025-11-23) → v2.3.1 (2025-11-23) → v2.4.0 (2025-11-23)
+v2.3.0 (2025-11-23) → v2.3.1 (2025-11-23) → v2.4.0 (2025-11-23) →
+v2.4.1 (2025-11-24) → v2.4.2 (2025-11-24) → v2.5.0 (2025-11-24)
 ```
+
+---
+
+## v2.5.0 (2025-11-24) - Manual Re-Test Override & UI Refinement
+
+### Type: Major Feature (User Control)
+
+### Overview
+Implemented checkbox-based manual override system for Re-Test Date (Field 13) with linked Test Report Number field. Allows users to specify non-standard re-test dates while maintaining data safety and compliance warnings.
+
+### Major Changes
+
+#### 1. Override Checkbox System
+**File:** `dod_label_app.py` (lines 1017-1022)
+
+**Added:**
+- "Override Default Re-Test Date" checkbox (default: unchecked)
+- Controls both Re-Test Date and Test Report Number fields
+- Visual grouping in col2 (right column)
+
+**Behavior:**
+```python
+override_retest = st.checkbox(
+    "Override Default Re-Test Date",
+    value=False,
+    help="Check this to manually specify a Re-Test Date instead of using the calculated default"
+)
+```
+
+#### 2. Conditional Field States
+**Fields Affected:**
+- **Re-Test Date Picker** (Field 13)
+- **Test Report Number** (Field 14)
+
+**State Logic:**
+```python
+# Re-Test Date
+retest_date = st.date_input(
+    "Re-Test Date",
+    value=default_retest_date,
+    disabled=not override_retest,  # Linked to checkbox
+    ...
+)
+
+# Test Report Number
+test_report_no = st.text_input(
+    "Test Report Number",
+    value="-",
+    disabled=not override_retest,  # Linked to checkbox
+    ...
+)
+```
+
+**User Experience:**
+- Unchecked: Both fields grayed out (display-only)
+- Checked: Both fields active (editable)
+
+#### 3. Stale Data Prevention (Safety Rule)
+**File:** `dod_label_app.py` (line 1078)
+
+**Critical Safety Logic:**
+```python
+row_data = {
+    ...
+    'test_report_no': test_report_no if override_retest else "-",
+    'retest_date': retest_date.strftime('%d/%m/%Y') if override_retest and retest_date else None,
+    ...
+}
+```
+
+**Purpose:**
+- Prevents stale values from disabled inputs printing on labels
+- If user types "TR-123" then unchecks override → forces "-" instead of "TR-123"
+- Ensures data consistency: Manual dates always paired with optional report numbers
+
+#### 4. Generator Logic Updates
+**Files:**
+- `dod_label_generator_png.py` (lines 468-475)
+- `dod_label_app.py` DoDLabelGenerator class (lines 461-468)
+
+**Override Handling:**
+```python
+manual_retest = row.get('retest_date')
+if manual_retest and manual_retest not in [None, '-', '']:
+    # Manual override: format the provided date
+    retest_display = self.format_date_display(str(manual_retest))
+else:
+    # Auto-calculate: use the use_by_date (Field 19)
+    retest_display = use_by_date
+```
+
+**Behavior:**
+- Receives `None` → Auto-calculates (DOM + shelf life)
+- Receives date string → Uses manual date
+- Consistent across PNG and app generators
+
+#### 5. Compliance Warning
+**File:** `dod_label_app.py` (line 1035)
+
+**Warning Trigger:**
+```python
+if override_retest and (not test_report_no or test_report_no == "-"):
+    st.warning("⚠️ Compliance Warning: You are overriding the Re-Test date without a Test Report Number.")
+```
+
+**Conditions:**
+- Override is checked AND
+- Test Report is empty OR equals "-"
+
+**Purpose:**
+- Reminds users to document manual date changes
+- Helps maintain regulatory compliance
+
+### Use Cases
+
+**Case 1: Standard Operation (Default)**
+- User leaves override unchecked
+- Re-Test Date auto-calculated: DOM + shelf life months
+- Test Report shows "-"
+- No warning displayed
+- **Example:** DOM = 12 Nov 2024, Shelf Life = 36 months → Re-Test = 12 Nov 2027
+
+**Case 2: Special Testing Schedule**
+- User checks override
+- Manually sets Re-Test Date to 6 months from now
+- Enters Test Report Number: "QA-2024-456"
+- Label prints custom date and report number
+- **Example:** Custom Re-Test = 12 May 2025, Report = "QA-2024-456"
+
+**Case 3: Regulatory Exception**
+- Product requires accelerated testing
+- User checks override, sets Re-Test = DOM + 12 months (instead of 36)
+- Enters Test Report explaining shortened interval
+- System accepts and prints custom schedule
+
+### Benefits
+
+✅ **Flexibility:** Accommodates special cases requiring non-standard re-test intervals
+✅ **Data Safety:** Stale data prevention ensures label accuracy
+✅ **User Guidance:** Compliance warnings remind users to document changes
+✅ **Logical UI:** Grouped fields make relationship clear
+✅ **Consistent:** Use by Date (Field 19) remains auto-calculated (unchanged)
+
+### Impact
+- **High Value:** Enables real-world edge cases without breaking standard workflow
+- **Low Risk:** Default behavior unchanged (backwards compatible)
+- **Compliance:** Warning system helps maintain documentation standards
 
 ---
 
