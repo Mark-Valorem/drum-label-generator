@@ -999,12 +999,6 @@ def show_label_generator(products_db):
             help="Select the manufacturing date (Field 8)"
         )
 
-        test_report_no = st.text_input(
-            "Test Report Number",
-            value="-",
-            help="Enter test report number or leave as '-' if not applicable (Field 14)"
-        )
-
     with col2:
         st.markdown("#### Calculated Defaults")
 
@@ -1029,8 +1023,16 @@ def show_label_generator(products_db):
             help=f"Default: DOM + {selected_product['shelf_life_months']} months. Enable override to manually specify. (Field 13)"
         )
 
+        # Test Report Number (linked to override checkbox)
+        test_report_no = st.text_input(
+            "Test Report Number",
+            value="-",
+            disabled=not override_retest,
+            help="Required when overriding Re-Test Date. Enter test report number or leave as '-' if using default calculation (Field 14)"
+        )
+
         # Warning if override is active but test report is missing
-        if override_retest and not test_report_no:
+        if override_retest and (not test_report_no or test_report_no == "-"):
             st.warning("⚠️ Compliance Warning: You are overriding the Re-Test date without a Test Report Number.")
 
         # Calculate Use by Date (display only)
@@ -1073,7 +1075,7 @@ def show_label_generator(products_db):
             'capacity_net_weight': selected_product['capacity_weight'],
             'safety_movement_markings': selected_product['safety_markings'],
             'shelf_life_months': selected_product['shelf_life_months'],
-            'test_report_no': test_report_no,
+            'test_report_no': test_report_no if override_retest else "-",
             'unit_of_issue': selected_product['unit_of_issue'],
             'hazardous_material_code': selected_product['hazardous_material_code'],
             'retest_date': retest_date.strftime('%d/%m/%Y') if override_retest and retest_date else None,
